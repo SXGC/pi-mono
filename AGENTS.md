@@ -1,5 +1,7 @@
 # Development Rules
 
+所有最终回答都使用中文。
+
 ## First Message
 If the user did not give you a concrete task in their first message,
 read README.md, then ask which module(s) to work on. Based on the answer, read the relevant README.md files in parallel.
@@ -20,9 +22,9 @@ read README.md, then ask which module(s) to work on. Based on the answer, read t
 - Never hardcode key checks with, eg. `matchesKey(keyData, "ctrl+x")`. All keybindings must be configurable. Add default to matching object (`DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS`)
 
 ## Commands
-- After code changes (not documentation changes): `npm run check` (get full output, no tail). Fix all errors, warnings, and infos before committing.
-- Note: `npm run check` does not run tests.
-- NEVER run: `npm run dev`, `npm run build`, `npm test`
+- After code changes (not documentation changes): `pnpm check` (get full output, no tail). Fix all errors, warnings, and infos before committing.
+- Note: `pnpm check` does not run tests.
+- NEVER run: `pnpm dev`, `pnpm build`, `pnpm test`
 - Only run specific tests if user instructs: `npx tsx ../../node_modules/vitest/dist/cli.js --run test/specific.test.ts`
 - Run tests from the package root, not the repo root.
 - When writing tests, run them, identify issues in either the test or implementation, and iterate until fixed.
@@ -163,8 +165,8 @@ For non-standard auth, create utility (e.g., `bedrock-utils.ts`) with credential
 
 2. **Run release script**:
    ```bash
-   npm run release:patch    # Fixes and additions
-   npm run release:minor    # API breaking changes
+   pnpm release:patch    # Fixes and additions
+   pnpm release:minor    # API breaking changes
    ```
 
 The script handles: version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.
@@ -214,3 +216,7 @@ git pull --rebase && git push
 - Resolve conflicts in YOUR files only
 - If conflict is in a file you didn't modify, abort and ask the user
 - NEVER force push
+
+## Final
+
+所有最终回答都使用中文。

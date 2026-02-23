@@ -14,12 +14,12 @@
 	],
 	"scripts": {
 		"clean": "rm -rf dist",
-		"generate-models": "npx tsx scripts/generate-models.ts",
-		"build": "npm run generate-models && tsgo -p tsconfig.build.json",
+		"generate-models": "pnpm exec tsx scripts/generate-models.ts",
+		"build": "pnpm run generate-models && tsgo -p tsconfig.build.json",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"dev:tsc": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"test": "vitest --run",
-		"prepublishOnly": "npm run clean && npm run build"
+		"prepublishOnly": "pnpm run clean && pnpm run build"
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.73.0",
@@ -27,6 +27,7 @@
 		"@google/genai": "^1.40.0",
 		"@mistralai/mistralai": "1.10.0",
 		"@sinclair/typebox": "^0.34.41",
+		"@smithy/node-http-handler": "^4.4.10",
 		"ajv": "^8.17.1",
 		"ajv-formats": "^3.0.1",
 		"chalk": "^5.6.2",
