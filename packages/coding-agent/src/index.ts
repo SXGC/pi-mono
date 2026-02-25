@@ -23,6 +23,15 @@ export {
 	InMemoryAuthStorageBackend,
 	type OAuthCredential,
 } from "./core/auth-storage.js";
+export {
+	type BuiltinCommandResult,
+	type BuiltinCommandRuntime,
+	tryBuiltinCommand,
+} from "./core/command-dispatcher.js";
+export {
+	isBuiltinCommand,
+	parseSlashCommand,
+} from "./core/command-parser.js";
 // Compaction
 export {
 	type BranchPreparation,
@@ -141,6 +150,12 @@ export {
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.js";
 export { convertToLlm } from "./core/messages.js";
+export {
+	findExactModelMatch,
+	findModelCandidates,
+	formatModelNotFound,
+	formatModelStatus,
+} from "./core/model-matcher.js";
 export { ModelRegistry } from "./core/model-registry.js";
 export type {
 	PackageManager,

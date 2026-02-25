@@ -46,14 +46,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.m
 ## Development
 
 ```bash
-npm install          # Install all dependencies
-npm run build        # Build all packages
-npm run check        # Lint, format, and type check
+pnpm install          # Install all dependencies
+pnpm build        # Build all packages
+pnpm check        # Lint, format, and type check
 ./test.sh            # Run tests (skips LLM-dependent tests without API keys)
 ./pi-test.sh         # Run pi from sources (must be run from repo root)
 ```
 
-> **Note:** `npm run check` requires `npm run build` to be run first. The web-ui package uses `tsc` which needs compiled `.d.ts` files from dependencies.
+> **Note:** `pnpm check` requires `pnpm build` to be run first. The web-ui package uses `tsc` which needs compiled `.d.ts` files from dependencies.
 
 ## License
 
