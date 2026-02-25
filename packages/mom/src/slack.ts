@@ -1,3 +1,4 @@
+import { isBuiltinCommand, parseSlashCommand } from "@mariozechner/pi-coding-agent";
 import { SocketModeClient } from "@slack/socket-mode";
 import type { KnownBlock } from "@slack/types";
 import { WebClient } from "@slack/web-api";
@@ -93,23 +94,6 @@ export interface MomHandler {
 	handleStop(channelId: string, slack: SlackBot): Promise<void>;
 
 	getRunner(channelId: string): AgentRunner | undefined;
-}
-
-function parseSlashCommand(text: string): { name: string; args: string } | null {
-	if (!text.startsWith("/")) return null;
-
-	const trimmed = text.trim();
-	const spaceIndex = trimmed.indexOf(" ");
-
-	const name = (spaceIndex === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIndex)).trim().toLowerCase();
-	const args = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1);
-
-	if (!name) return null;
-	return { name, args };
-}
-
-function isBuiltinCommand(name: string): boolean {
-	return name === "model" || name === "new";
 }
 
 // ============================================================================

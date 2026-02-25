@@ -516,7 +516,7 @@ Terminal 2 (mom, with auto-restart):
 ```bash
 cd packages/mom
 npx tsx --watch-path src --watch src/main.ts --sandbox=docker:mom-sandbox ./data
-pnpm exec tsx --watch-path src --watch src/main.ts ./data
+pnpm exec tsx --watch-path src --watch src/main.ts ~/.pi/data
 ```
 
 ## License

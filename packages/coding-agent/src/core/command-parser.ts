@@ -11,9 +11,10 @@ export function parseSlashCommand(text: string): { name: string; args: string } 
 	const trimmed = text.trim();
 	const spaceIndex = trimmed.indexOf(" ");
 
-	const name = spaceIndex === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIndex);
+	const name = (spaceIndex === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIndex)).trim().toLowerCase();
 	const args = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1);
 
+	if (!name) return null;
 	return { name, args };
 }
 

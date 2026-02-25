@@ -15,64 +15,23 @@ Both `pi-coding-agent` (interactive TUI) and `mom` (Slack bot) support a set of 
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              coding-agent                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  slash-commands.ts        command-parser.ts       command-dispatcher.ts     │
-│  ┌───────────────────┐    ┌──────────────────┐    ┌─────────────────────┐   │
-│  │ BUILTIN_SLASH_    │    │ parseSlashCommand│    │ BuiltinCommandRuntime│   │
-│  │ COMMANDS: [       │    │ isBuiltinCommand │    │ BuiltinCommandResult │   │
-│  │   "model",        │───▶│                  │───▶│ tryBuiltinCommand()  │   │
-│  │   "new",          │    │                  │    │ handleModelCommand() │   │
-│  │   "settings",     │    │                  │    │ handleNewCommand()   │   │
-│  │   ...             │    │                  │    │                      │   │
-│  │ ]                 │    └──────────────────┘    └─────────────────────┘   │
-│  └───────────────────┘                            │                         │
-│                                                   ▼                         │
-│                                          model-matcher.ts                   │
-│                                          ┌─────────────────┐                │
-│                                          │ findExactModel  │                │
-│                                          │ findModel       │                │
-│                                          │ Candidates      │                │
-│                                          │ formatModel     │                │
-│                                          │ formatModel     │                │
-│                                          │ NotFound        │                │
-│                                          └─────────────────┘                │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ Public API
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              @mariozechner/pi-coding-agent                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Exported from index.ts:                                                      │
-│  - BuiltinCommandRuntime (interface)                                         │
-│  - BuiltinCommandResult (interface)                                          │
-│  - tryBuiltinCommand (function)                                              │
-│  - findExactModelMatch (function)                                            │
-│  - findModelCandidates (function)                                            │
-│  - formatModelStatus (function)                                              │
-│  - formatModelNotFound (function)                                            │
-│  - parseSlashCommand (function)                                              │
-│  - isBuiltinCommand (function)                                               │
-                                    │
-                                    │ Import
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                  mom                                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  agent.ts imports from @mariozechner/pi-coding-agent:                         │
-│  - tryBuiltinCommand                                                         │
-│  - type BuiltinCommandRuntime                                                │
-│  - type BuiltinCommandResult                                                 │
-│                                                                              │
-│  agent.ts implements:                                                        │
-│  - builtinRuntime object (injects mom-specific capabilities)                 │
-```
+The builtin command system is organized into three layers within `coding-agent`:
+
+1. **Command Definition** (`slash-commands.ts`) — Defines the list of builtin commands including `model`, `new`, `settings`, and others
+2. **Command Parsing** (`command-parser.ts`) — Provides `parseSlashCommand` to extract command name and arguments, plus `isBuiltinCommand` to check if a name matches a builtin
+3. **Command Dispatch** (`command-dispatcher.ts`) — Implements `tryBuiltinCommand` which routes to specific handlers, and defines the runtime/result interfaces
+
+The model-matcher module is an internal implementation detail used by command handlers, not part of the public API.
+
+## Public API
+
+The following are exported from `@mariozechner/pi-coding-agent` for consumers:
+
+- `BuiltinCommandRuntime` (interface) — Capabilities a command handler needs
+- `BuiltinCommandResult` (interface) — Standardized return type for commands
+- `tryBuiltinCommand` (function) — Main entry point for command dispatch
+- `parseSlashCommand` (function) — Parse slash command text into name and args
+- `isBuiltinCommand` (function) — Check if a command name is builtin
 
 ## Core Components
 
@@ -80,200 +39,72 @@ Both `pi-coding-agent` (interactive TUI) and `mom` (Slack bot) support a set of 
 
 Interface that defines the capabilities a command handler needs. UI-agnostic by design.
 
-```typescript
-interface BuiltinCommandRuntime {
-  // Model management
-  modelRegistry: ModelRegistry;
-  currentModel: Model | undefined;
-  setModel(model: Model): Promise<void>;
+**Model Management:**
+- `modelRegistry` — Access to available models and authentication
+- `currentModel` — The currently active model
+- `setModel(model)` — Switch to a new model
 
-  // Session management
-  newSession(): Promise<boolean>;
-  isStreaming: boolean;
-  abort(): Promise<void>;
+**Session Management:**
+- `newSession()` — Create a fresh session
+- `isStreaming` — Whether output is currently streaming
+- `abort()` — Cancel current operation
 
-  // User feedback
-  showStatus(message: string): void;
-  showError(message: string): void;
-}
-```
+**User Feedback:**
+- `showStatus(message)` — Display status information
+- `showError(message)` — Display error information
 
 ### BuiltinCommandResult
 
-Standardized return type for all builtin commands.
+Standardized return type for all builtin commands:
 
-```typescript
-interface BuiltinCommandResult {
-  handled: boolean;    // Was this command recognized?
-  success?: boolean;   // Did it succeed?
-  message?: string;    // User-visible feedback
-  error?: string;      // Error message (if any)
-}
-```
+- `handled` — Whether this command was recognized
+- `success` — Whether execution succeeded (optional)
+- `message` — User-visible feedback text (optional)
+- `error` — Error message if something went wrong (optional)
 
 ### tryBuiltinCommand
 
-Main entry point for command dispatch.
-
-```typescript
-async function tryBuiltinCommand(
-  name: string,                    // Command name without "/" prefix
-  args: string,                    // Raw arguments string
-  runtime: BuiltinCommandRuntime   // Injected capabilities
-): Promise<BuiltinCommandResult>;
-```
+Main entry point for command dispatch. Takes the command name (without slash prefix), raw arguments string, and the runtime capability injection. Returns a `BuiltinCommandResult`.
 
 ## Command Flow
 
 ### /model Command
 
-```
-User: "/model zai/glm-5"
-          │
-          ▼
-┌─────────────────────────────┐
-│ parseSlashCommand()         │
-│ → { name: "model",          │
-│     args: "zai/glm-5" }     │
-└─────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│ isBuiltinCommand("model")   │
-│ → true                      │
-└─────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│ tryBuiltinCommand()         │
-│ → handleModelCommand()      │
-└─────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│ findExactModelMatch()       │
-│ Searches:                    │
-│   - provider/modelId match   │
-│   - modelId only match       │
-│ Only in getAvailable() list  │
-└─────────────────────────────┘
-          │
-    ┌─────┴─────┐
-    │           │
-    ▼           ▼
-┌────────┐  ┌─────────────────┐
-│ Found  │  │ Not Found       │
-│        │  │                 │
-│ Switch │  │ findModel       │
-│ Model  │  │ Candidates()    │
-│        │  │ → Show matches  │
-└────────┘  └─────────────────┘
-```
+1. User types `/model zai/glm-5`
+2. `parseSlashCommand` extracts name "model" and args "zai/glm-5"
+3. `isBuiltinCommand("model")` confirms it is a builtin
+4. `tryBuiltinCommand` routes to `handleModelCommand`
+5. If no args provided, returns current model status
+6. If args provided, attempts exact match on model ID (with optional provider prefix)
+7. On match found, calls `runtime.setModel()` to switch
+8. On no match, searches for similar models and shows suggestions
+
+**Model Matching:** Only searches models returned by `modelRegistry.getAvailable()`, which filters to models with valid authentication configured.
 
 ### /new Command
 
-```
-User: "/new"
-          │
-          ▼
-┌─────────────────────────────┐
-│ parseSlashCommand()         │
-│ → { name: "new", args: "" } │
-└─────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│ tryBuiltinCommand()         │
-│ → handleNewCommand()        │
-└─────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│ If streaming: abort()       │
-└─────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│ newSession()                │
-│ → Archive current session   │
-│ → Clear context             │
-│ → Reset state               │
-└─────────────────────────────┘
-```
-
-## Model Matching Logic
-
-### findExactModelMatch
-
-Attempts exact match on model ID with optional provider filter.
-
-```typescript
-function findExactModelMatch(
-  searchTerm: string,      // "glm-5" or "zai/glm-5"
-  modelRegistry: ModelRegistry
-): Model | undefined {
-  // 1. Parse "provider/modelId" format
-  // 2. Get available models (hasAuth filter applied!)
-  // 3. Match: modelId exact + provider optional
-  // 4. Return only if single match
-}
-```
-
-**Important**: Only searches `modelRegistry.getAvailable()`, which filters models that have valid authentication configured.
-
-### findModelCandidates
-
-Fuzzy search for error suggestions.
-
-```typescript
-function findModelCandidates(
-  searchTerm: string,
-  modelRegistry: ModelRegistry,
-  limit: number = 5
-): Model[] {
-  // Filter: modelId.contains(term) OR provider.contains(term)
-  // Case-insensitive
-}
-```
+1. User types `/new`
+2. `parseSlashCommand` extracts name "new" and empty args
+3. `tryBuiltinCommand` routes to `handleNewCommand`
+4. If any arguments provided, returns usage error
+5. If currently streaming, calls `runtime.abort()` first
+6. Calls `runtime.newSession()` to archive current session and start fresh
 
 ## Implementation in mom
 
-mom implements its own `BuiltinCommandRuntime` in `agent.ts`:
+mom imports the command system from `@mariozechner/pi-coding-agent`:
 
-```typescript
-const builtinRuntime: BuiltinCommandRuntime = {
-  get modelRegistry() {
-    return modelRegistry;
-  },
-  get currentModel() {
-    return agent.state.model;
-  },
-  async setModel(model) {
-    const apiKey = await modelRegistry.getApiKey(model);
-    if (!apiKey) {
-      throw new Error(`No API key for ${model.provider}/${model.id}`);
-    }
-    agent.setModel(model);
-    sessionManager.appendModelChange(model.provider, model.id);
-    settingsManager.setDefaultModelAndProvider(model.provider, model.id);
-  },
-  async newSession() {
-    await resetSession();
-    return true;
-  },
-  get isStreaming() {
-    return agent.state.isStreaming;
-  },
-  async abort() {
-    agent.abort();
-    await agent.waitForIdle();
-  },
-  showStatus(message) {
-    agentLog.info(`[${channelId}] Status: ${message}`);
-  },
-  showError(message) {
-    agentLog.warning(`[${channelId}] Error: ${message}`);
-  },
-};
-```
+**In `agent.ts`:**
+- Imports `tryBuiltinCommand`, `BuiltinCommandRuntime`, and `BuiltinCommandResult` types
+- Implements a `builtinRuntime` object that provides mom-specific capabilities:
+  - `modelRegistry` — Returns the shared ModelRegistry instance
+  - `currentModel` — Returns the agent's current model state
+  - `setModel` — Validates API key, updates agent, logs change, persists to settings
+  - `newSession` — Archives current session files and resets agent state
+  - `isStreaming` — Returns agent streaming state
+  - `abort` — Aborts agent and waits for idle
+  - `showStatus` / `showError` — Logs to agent logger
 
+**In `slack.ts`:**
+- Imports `parseSlashCommand` and `isBuiltinCommand`
+- Uses these to detect and route builtin commands before normal message processing

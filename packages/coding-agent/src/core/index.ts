@@ -68,9 +68,3 @@ export {
 	type TurnStartEvent,
 	wrapToolsWithExtensions,
 } from "./extensions/index.js";
-export {
-	findExactModelMatch,
-	findModelCandidates,
-	formatModelNotFound,
-	formatModelStatus,
-} from "./model-matcher.js";
