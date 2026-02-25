@@ -1913,7 +1913,29 @@ export class InteractiveMode {
 				return;
 			}
 
-			if (parsed && isBuiltinCommand(parsed.name) && (parsed.name === "model" || parsed.name === "new")) {
+			if (parsed && isBuiltinCommand(parsed.name) && parsed.name === "model") {
+				this.editor.setText("");
+				// No args: open model selector directly
+				if (!parsed.args) {
+					this.showModelSelector();
+					return;
+				}
+				// With args: try exact match first
+				const result: BuiltinCommandResult = await tryBuiltinCommand(parsed.name, parsed.args, this.builtinRuntime);
+				if (result.success && result.message) {
+					this.showStatus(result.message);
+					return;
+				}
+				if (result.error) {
+					this.showError(result.error);
+					return;
+				}
+				// Not an exact match (no error, but not successful): open selector with filter
+				this.showModelSelector(parsed.args);
+				return;
+			}
+
+			if (parsed && isBuiltinCommand(parsed.name) && parsed.name === "new") {
 				this.editor.setText("");
 				const result: BuiltinCommandResult = await tryBuiltinCommand(parsed.name, parsed.args, this.builtinRuntime);
 				if (result.handled) {
@@ -1923,7 +1945,7 @@ export class InteractiveMode {
 					if (result.error) {
 						this.showError(result.error);
 					}
-					if (parsed.name === "new" && result.success) {
+					if (result.success) {
 						await this.clearSessionUI();
 					}
 					return;

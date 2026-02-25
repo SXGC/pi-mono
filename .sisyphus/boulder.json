@@ -1,9 +1,9 @@
 {
-  "active_plan": "/Users/cai/Dev/pi-mono/.sisyphus/plans/langfuse-otel-integration.md",
-  "started_at": "2026-02-24T15:07:54.000Z",
+  "active_plan": "/Users/cai/Dev/pi-mono/.sisyphus/plans/mom-slash-commands.md",
+  "started_at": "2026-02-25T09:15:54.905Z",
   "session_ids": [
-    "ses_36fcebb29ffebJCWe3jBz1mN1f"
+    "ses_36bea9f75ffeCjaJDwzOvhw33M"
   ],
-  "plan_name": "langfuse-otel-integration",
+  "plan_name": "mom-slash-commands",
   "agent": "atlas"
 }

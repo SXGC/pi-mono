@@ -182,3 +182,111 @@ describe("InteractiveMode.showLoadedResources", () => {
 		expect(output).not.toContain("[Skills]");
 	});
 });
+
+describe("InteractiveMode /model command handling", () => {
+	beforeAll(() => {
+		initTheme("dark");
+	});
+
+	test("/model with no args opens model selector", async () => {
+		const showModelSelector = vi.fn();
+		const editor = { setText: vi.fn(), insertTextAtCursor: vi.fn() };
+		const fakeThis: any = {
+			editor,
+			defaultEditor: { onSubmit: null as ((text: string) => Promise<void>) | null },
+			showModelSelector,
+		};
+
+		// Call setupEditorSubmitHandler to set up the onSubmit handler
+		(InteractiveMode as any).prototype.setupEditorSubmitHandler.call(fakeThis);
+
+		// Simulate user submitting "/model"
+		await fakeThis.defaultEditor.onSubmit("/model");
+
+		expect(showModelSelector).toHaveBeenCalledTimes(1);
+		expect(showModelSelector).toHaveBeenCalledWith();
+		expect(editor.setText).toHaveBeenCalledWith("");
+	});
+
+	test("/model with non-matching args opens model selector with filter", async () => {
+		const showModelSelector = vi.fn();
+		const showStatus = vi.fn();
+		const showError = vi.fn();
+		const editor = { setText: vi.fn(), insertTextAtCursor: vi.fn() };
+
+		// Create a minimal builtinRuntime mock that simulates non-exact match
+		const builtinRuntime = {
+			modelRegistry: {
+				getAvailable: () => [{ id: "claude-sonnet-4-5", provider: "anthropic", name: "Claude Sonnet 4.5" }],
+			},
+			currentModel: { id: "claude-sonnet-4-5", provider: "anthropic" },
+			setModel: vi.fn(),
+		};
+
+		const fakeThis: any = {
+			editor,
+			defaultEditor: { onSubmit: null as ((text: string) => Promise<void>) | null },
+			showModelSelector,
+			showStatus,
+			showError,
+			builtinRuntime,
+		};
+
+		// Call setupEditorSubmitHandler to set up the onSubmit handler
+		(InteractiveMode as any).prototype.setupEditorSubmitHandler.call(fakeThis);
+
+		// Simulate user submitting "/model sonnet" - not an exact match
+		await fakeThis.defaultEditor.onSubmit("/model sonnet");
+
+		// Should open selector with the filter term since "sonnet" is not an exact match
+		expect(showModelSelector).toHaveBeenCalledTimes(1);
+		expect(showModelSelector).toHaveBeenCalledWith("sonnet");
+		expect(editor.setText).toHaveBeenCalledWith("");
+	});
+
+	test("/model with exact match shows success status", async () => {
+		const showModelSelector = vi.fn();
+		const showStatus = vi.fn();
+		const showError = vi.fn();
+		const editor = { setText: vi.fn(), insertTextAtCursor: vi.fn() };
+
+		// Create a builtinRuntime mock with an exact match model
+		const builtinRuntime = {
+			modelRegistry: {
+				getAvailable: () => [
+					{ id: "claude-sonnet-4-5", provider: "anthropic", name: "Claude Sonnet 4.5", api: "anthropic-messages" },
+				],
+				getAll: () => [
+					{ id: "claude-sonnet-4-5", provider: "anthropic", name: "Claude Sonnet 4.5", api: "anthropic-messages" },
+				],
+				find: (provider: string, modelId: string) =>
+					provider === "anthropic" && modelId === "claude-sonnet-4-5"
+						? { id: "claude-sonnet-4-5", provider: "anthropic" }
+						: undefined,
+			},
+			currentModel: { id: "claude-sonnet-4-5", provider: "anthropic" },
+			setModel: vi.fn().mockResolvedValue(undefined),
+		};
+
+		const fakeThis: any = {
+			editor,
+			defaultEditor: { onSubmit: null as ((text: string) => Promise<void>) | null },
+			showModelSelector,
+			showStatus,
+			showError,
+			builtinRuntime,
+		};
+
+		// Call setupEditorSubmitHandler to set up the onSubmit handler
+		(InteractiveMode as any).prototype.setupEditorSubmitHandler.call(fakeThis);
+
+		// Simulate user submitting "/model claude-sonnet-4-5" - exact match
+		await fakeThis.defaultEditor.onSubmit("/model claude-sonnet-4-5");
+
+		// Should NOT open selector, but show success status
+		expect(showModelSelector).not.toHaveBeenCalled();
+		expect(showStatus).toHaveBeenCalledTimes(1);
+		expect(showStatus).toHaveBeenCalledWith(expect.stringContaining("Switched model to"));
+		expect(builtinRuntime.setModel).toHaveBeenCalledTimes(1);
+	});
+});

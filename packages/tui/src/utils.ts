@@ -29,9 +29,10 @@ function couldBeEmoji(segment: string): boolean {
 }
 
 // Regexes for character classification (same as string-width library)
-const zeroWidthRegex = /^(?:\p{Default_Ignorable_Code_Point}|\p{Control}|\p{Mark}|\p{Surrogate})+$/v;
-const leadingNonPrintingRegex = /^[\p{Default_Ignorable_Code_Point}\p{Control}\p{Format}\p{Mark}\p{Surrogate}]+/v;
-const rgiEmojiRegex = /^\p{RGI_Emoji}$/v;
+const zeroWidthRegex = /^(?:\p{Default_Ignorable_Code_Point}|\p{Control}|\p{Mark}|\p{Surrogate})+$/u;
+const leadingNonPrintingRegex = /^[\p{Default_Ignorable_Code_Point}\p{Control}\p{Format}\p{Mark}\p{Surrogate}]+/u;
+// RGI_Emoji requires ES2024 v-flag; use a broad emoji pattern as fallback
+const rgiEmojiRegex = /^\p{Emoji_Presentation}\p{Emoji_Modifier}?\p{Emoji_Modifier_Base}?$/u;
 
 // Cache for non-ASCII strings
 const WIDTH_CACHE_SIZE = 512;

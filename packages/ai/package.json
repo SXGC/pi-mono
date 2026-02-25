@@ -12,6 +12,16 @@
 		"dist",
 		"README.md"
 	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./telemetry": {
+			"types": "./dist/telemetry/index.d.ts",
+			"import": "./dist/telemetry/index.js"
+		}
+	},
 	"scripts": {
 		"clean": "rm -rf dist",
 		"generate-models": "pnpm exec tsx scripts/generate-models.ts",

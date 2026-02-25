@@ -1,4 +1,7 @@
-import { initTelemetry as initAiTelemetry, shutdownTelemetry as shutdownAiTelemetry } from "@mariozechner/pi-ai";
+import {
+	initTelemetry as initAiTelemetry,
+	shutdownTelemetry as shutdownAiTelemetry,
+} from "@mariozechner/pi-ai/telemetry";
 import { type Span, type Tracer, trace } from "@opentelemetry/api";
 import type { TelemetryConfig } from "./types.js";
 

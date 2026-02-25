@@ -1097,6 +1097,15 @@ const response = await complete(model, {
 
 ## Development
 
+### Adding New Models
+
+To add new models to an existing provider or add a provider that uses an existing API (e.g., OpenAI-compatible), see **[docs/adding-models.md](docs/adding-models.md)** for detailed instructions.
+
+Key points:
+- Never manually edit `src/models.generated.ts` - it's auto-generated
+- Modify `scripts/generate-models.ts` to add models
+- Run `pnpm generate-models` to regenerate the model registry
+
 ### Adding a New Provider
 
 Adding a new LLM provider requires changes across multiple files. This checklist covers all necessary steps:
