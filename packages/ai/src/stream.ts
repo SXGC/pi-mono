@@ -294,7 +294,7 @@ export async function completeSimple<TApi extends Api>(
 
 /**
  * Wraps an event stream with OpenTelemetry span tracking.
- * Records usage, cost, and errors when the stream completes.
+ * Records usage and errors when the stream completes.
  * All span operations are wrapped in try-catch to prevent telemetry failures from disrupting the stream.
  */
 function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span): AssistantMessageEventStream {
@@ -318,13 +318,6 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 							reasoningTokens: 0,
 							cachedInputTokens: msg.usage.cacheRead,
 						});
-						const serializedCostDetails = serializeForAttribute({
-							input: msg.usage.cost.input,
-							output: msg.usage.cost.output,
-							cacheRead: msg.usage.cost.cacheRead,
-							cacheWrite: msg.usage.cost.cacheWrite,
-							total: msg.usage.cost.total,
-						});
 
 						const doneAttributes: Record<string, string | number | boolean> = {
 							"gen_ai.usage.input_tokens": msg.usage.input,
@@ -332,18 +325,10 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 							"gen_ai.usage.total_tokens": msg.usage.totalTokens,
 							"gen_ai.usage.cached_input_tokens": msg.usage.cacheRead,
 							"gen_ai.usage.reasoning_tokens": 0,
-							"gen_ai.cost.input": msg.usage.cost.input,
-							"gen_ai.cost.output": msg.usage.cost.output,
-							"gen_ai.cost.cache_read": msg.usage.cost.cacheRead,
-							"gen_ai.cost.cache_write": msg.usage.cost.cacheWrite,
-							"gen_ai.cost.total": msg.usage.cost.total,
 						};
 
 						if (serializedUsageDetails) {
 							doneAttributes["langfuse.observation.usage_details"] = serializedUsageDetails;
-						}
-						if (serializedCostDetails) {
-							doneAttributes["langfuse.observation.cost_details"] = serializedCostDetails;
 						}
 						if (serializedOutput) {
 							doneAttributes["langfuse.observation.output"] = serializedOutput;

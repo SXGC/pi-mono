@@ -420,19 +420,38 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 	const modelRegistry = new ModelRegistry(authStorage);
 	const loadedSession = sessionManager.buildSessionContext();
 	const availableModels = modelRegistry.getAvailable();
+	const configuredDefaultProvider = settingsManager.getDefaultProvider();
+	const configuredDefaultModel = settingsManager.getDefaultModel();
 	const restoredModel = loadedSession.model
 		? availableModels.find(
 				(m) => m.provider === loadedSession.model?.provider && m.id === loadedSession.model?.modelId,
 			)
 		: undefined;
 	const configuredModel =
-		settingsManager.getDefaultProvider() && settingsManager.getDefaultModel()
-			? availableModels.find(
-					(m) => m.provider === settingsManager.getDefaultProvider() && m.id === settingsManager.getDefaultModel(),
-				)
+		configuredDefaultProvider && configuredDefaultModel
+			? availableModels.find((m) => m.provider === configuredDefaultProvider && m.id === configuredDefaultModel)
 			: undefined;
 	const initialModel = restoredModel ?? configuredModel ?? availableModels[0];
+	const initialModelSource = restoredModel
+		? "restored-session"
+		: configuredModel
+			? "workspace-default"
+			: "first-available";
 	const initialThinkingLevel = initialModel?.reasoning ? settingsManager.getDefaultThinkingLevel() : "off";
+
+	if (configuredDefaultProvider && configuredDefaultModel) {
+		agentLog.info(`[${channelId}] Startup default model: ${configuredDefaultProvider}/${configuredDefaultModel}`);
+	} else {
+		agentLog.info(`[${channelId}] Startup default model: (not configured)`);
+	}
+
+	if (initialModel) {
+		agentLog.info(
+			`[${channelId}] Initial session model: ${initialModel.provider}/${initialModel.id} (${initialModelSource})`,
+		);
+	} else {
+		agentLog.warning(`[${channelId}] Initial session model: (none available)`);
+	}
 
 	// Create agent
 	let agent: Agent;
@@ -444,6 +463,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			tools,
 		},
 		convertToLlm,
+		sessionId: sessionManager.getSessionId(),
 		getApiKey: async (provider) => {
 			const resolvedProvider = provider || agent.state.model?.provider;
 			if (!resolvedProvider) {
@@ -787,6 +807,12 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			// Log context info
 			agentLog.info(`Context sizes - system: ${systemPrompt.length} chars, memory: ${memory.length} chars`);
 			agentLog.info(`Channels: ${ctx.channels.length}, Users: ${ctx.users.length}`);
+			const currentModel = session.model;
+			if (currentModel) {
+				agentLog.info(`[${channelId}] Current session model: ${currentModel.provider}/${currentModel.id}`);
+			} else {
+				agentLog.warning(`[${channelId}] Current session model: (none)`);
+			}
 
 			// Build user message with timestamp and username prefix
 			// Format: "[YYYY-MM-DD HH:MM:SS+HH:MM] [username]: message" so LLM knows when and who

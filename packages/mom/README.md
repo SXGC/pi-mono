@@ -96,6 +96,7 @@ Options:
 | `MOM_SLACK_APP_TOKEN` | Slack app-level token (xapp-...) |
 | `MOM_SLACK_BOT_TOKEN` | Slack bot token (xoxb-...) |
 | `ANTHROPIC_API_KEY` | (Optional) Anthropic API key |
+| `LANGFUSE_DEBUG` | (Optional) Enable Langfuse telemetry debug logs (`1`, `true`, `yes`, `on`) |
 
 ## Authentication
 
