@@ -281,12 +281,12 @@ export class MomSettingsManager {
 		this.save();
 	}
 
-	getDefaultThinkingLevel(): string {
+	getDefaultThinkingLevel(): "off" | "minimal" | "low" | "medium" | "high" {
 		return this.settings.defaultThinkingLevel || "off";
 	}
 
-	setDefaultThinkingLevel(level: string): void {
-		this.settings.defaultThinkingLevel = level as MomSettings["defaultThinkingLevel"];
+	setDefaultThinkingLevel(level: "off" | "minimal" | "low" | "medium" | "high"): void {
+		this.settings.defaultThinkingLevel = level;
 		this.save();
 	}
 

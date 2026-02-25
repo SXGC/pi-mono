@@ -1,11 +1,6 @@
 import type { Model } from "@mariozechner/pi-ai";
 import { describe, expect, test } from "vitest";
-import {
-	defaultModelPerProvider,
-	findInitialModel,
-	parseModelPattern,
-	resolveCliModel,
-} from "../src/core/model-resolver.js";
+import { findInitialModel, parseModelPattern, resolveCliModel } from "../src/core/model-resolver.js";
 
 // Mock models for testing
 const mockModels: Model<"anthropic-messages">[] = [
@@ -356,11 +351,52 @@ describe("resolveCliModel", () => {
 });
 
 describe("default model selection", () => {
-	test("ai-gateway default is opus 4.6", () => {
-		expect(defaultModelPerProvider["vercel-ai-gateway"]).toBe("anthropic/claude-opus-4-6");
+	test("findInitialModel selects configured default model when available", async () => {
+		const openAiModel: Model<"anthropic-messages"> = {
+			id: "gpt-4o",
+			name: "GPT-4o",
+			api: "anthropic-messages",
+			provider: "openai",
+			baseUrl: "https://api.openai.com",
+			reasoning: false,
+			input: ["text", "image"],
+			cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
+			contextWindow: 128000,
+			maxTokens: 4096,
+		};
+
+		const aiGatewayModel: Model<"anthropic-messages"> = {
+			id: "anthropic/claude-opus-4-6",
+			name: "Claude Opus 4.6",
+			api: "anthropic-messages",
+			provider: "vercel-ai-gateway",
+			baseUrl: "https://ai-gateway.vercel.sh",
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
+			contextWindow: 200000,
+			maxTokens: 8192,
+		};
+
+		const registry = {
+			getAvailable: async () => [aiGatewayModel, openAiModel],
+		} as unknown as Parameters<typeof findInitialModel>[0]["modelRegistry"];
+
+		const result = await findInitialModel({
+			scopedModels: [],
+			isContinuing: false,
+			defaultProvider: "openai",
+			defaultModelId: "gpt-4o",
+			defaultThinkingLevel: "low",
+			modelRegistry: registry,
+		});
+
+		expect(result.model?.provider).toBe("openai");
+		expect(result.model?.id).toBe("gpt-4o");
+		expect(result.thinkingLevel).toBe("low");
 	});
 
-	test("findInitialModel selects ai-gateway default when available", async () => {
+	test("findInitialModel falls back to first available model when configured default is unavailable", async () => {
 		const aiGatewayModel: Model<"anthropic-messages"> = {
 			id: "anthropic/claude-opus-4-6",
 			name: "Claude Opus 4.6",
@@ -381,6 +417,8 @@ describe("default model selection", () => {
 		const result = await findInitialModel({
 			scopedModels: [],
 			isContinuing: false,
+			defaultProvider: "anthropic",
+			defaultModelId: "claude-opus-4-6",
 			modelRegistry: registry,
 		});
 

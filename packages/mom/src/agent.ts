@@ -1,5 +1,5 @@
 import { Agent, type AgentEvent } from "@mariozechner/pi-agent-core";
-import { getModel, type ImageContent } from "@mariozechner/pi-ai";
+import type { ImageContent } from "@mariozechner/pi-ai";
 import {
 	AgentSession,
 	AuthStorage,
@@ -23,9 +23,6 @@ import type { ChannelInfo, SlackContext, UserInfo } from "./slack.js";
 import type { ChannelStore } from "./store.js";
 import { createMomTools, setUploadFunction } from "./tools/index.js";
 
-// Hardcoded model for now - TODO: make configurable (issue #63)
-const model = getModel("anthropic", "claude-sonnet-4-5");
-
 export interface PendingMessage {
 	userName: string;
 	text: string;
@@ -40,18 +37,6 @@ export interface AgentRunner {
 		pendingMessages?: PendingMessage[],
 	): Promise<{ stopReason: string; errorMessage?: string }>;
 	abort(): void;
-}
-
-async function getAnthropicApiKey(authStorage: AuthStorage): Promise<string> {
-	const key = await authStorage.getApiKey("anthropic");
-	if (!key) {
-		throw new Error(
-			"No API key found for anthropic.\n\n" +
-				"Set an API key environment variable, or use /login with Anthropic and link to auth.json from " +
-				join(homedir(), ".pi", "mom", "auth.json"),
-		);
-	}
-	return key;
 }
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
@@ -430,21 +415,58 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 	// Auth stored outside workspace so agent can't access it
 	const authStorage = AuthStorage.create(join(homedir(), ".pi", "mom", "auth.json"));
 	const modelRegistry = new ModelRegistry(authStorage);
+	const loadedSession = sessionManager.buildSessionContext();
+	const availableModels = modelRegistry.getAvailable();
+	const restoredModel = loadedSession.model
+		? availableModels.find(
+				(m) => m.provider === loadedSession.model?.provider && m.id === loadedSession.model?.modelId,
+			)
+		: undefined;
+	const configuredModel =
+		settingsManager.getDefaultProvider() && settingsManager.getDefaultModel()
+			? availableModels.find(
+					(m) => m.provider === settingsManager.getDefaultProvider() && m.id === settingsManager.getDefaultModel(),
+				)
+			: undefined;
+	const initialModel = restoredModel ?? configuredModel ?? availableModels[0];
+	const initialThinkingLevel = initialModel?.reasoning ? settingsManager.getDefaultThinkingLevel() : "off";
 
 	// Create agent
-	const agent = new Agent({
+	let agent: Agent;
+	agent = new Agent({
 		initialState: {
 			systemPrompt,
-			model,
-			thinkingLevel: "off",
+			model: initialModel,
+			thinkingLevel: initialThinkingLevel,
 			tools,
 		},
 		convertToLlm,
-		getApiKey: async () => getAnthropicApiKey(authStorage),
+		getApiKey: async (provider) => {
+			const resolvedProvider = provider || agent.state.model?.provider;
+			if (!resolvedProvider) {
+				throw new Error("No model selected");
+			}
+			const key = await modelRegistry.getApiKeyForProvider(resolvedProvider);
+			if (!key) {
+				const currentModel = agent.state.model;
+				const isOAuth = currentModel ? modelRegistry.isUsingOAuth(currentModel) : false;
+				if (isOAuth) {
+					throw new Error(
+						`Authentication failed for "${resolvedProvider}". ` +
+							"Credentials may have expired or network is unavailable. " +
+							`Run '/login ${resolvedProvider}' to re-authenticate.`,
+					);
+				}
+				throw new Error(
+					`No API key found for "${resolvedProvider}". ` +
+						`Set an API key environment variable or run '/login ${resolvedProvider}'.`,
+				);
+			}
+			return key;
+		},
 	});
 
 	// Load existing messages
-	const loadedSession = sessionManager.buildSessionContext();
 	if (loadedSession.messages.length > 0) {
 		agent.replaceMessages(loadedSession.messages);
 		log.logInfo(`[${channelId}] Loaded ${loadedSession.messages.length} messages from context.jsonl`);
@@ -841,7 +863,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 						lastAssistantMessage.usage.cacheRead +
 						lastAssistantMessage.usage.cacheWrite
 					: 0;
-				const contextWindow = model.contextWindow || 200000;
+				const contextWindow = session.model?.contextWindow || 200000;
 
 				const summary = log.logUsageSummary(runState.logCtx!, runState.totalUsage, contextTokens, contextWindow);
 				runState.queue.enqueue(() => ctx.respondInThread(summary), "usage summary");

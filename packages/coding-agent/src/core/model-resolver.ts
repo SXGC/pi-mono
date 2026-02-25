@@ -3,38 +3,12 @@
  */
 
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { type Api, type KnownProvider, type Model, modelsAreEqual } from "@mariozechner/pi-ai";
+import { type Api, type Model, modelsAreEqual } from "@mariozechner/pi-ai";
 import chalk from "chalk";
 import { minimatch } from "minimatch";
 import { isValidThinkingLevel } from "../cli/args.js";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
 import type { ModelRegistry } from "./model-registry.js";
-
-/** Default model IDs for each known provider */
-export const defaultModelPerProvider: Record<KnownProvider, string> = {
-	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
-	anthropic: "claude-opus-4-6",
-	openai: "gpt-5.1-codex",
-	"azure-openai-responses": "gpt-5.2",
-	"openai-codex": "gpt-5.3-codex",
-	google: "gemini-2.5-pro",
-	"google-gemini-cli": "gemini-2.5-pro",
-	"google-antigravity": "gemini-3-pro-high",
-	"google-vertex": "gemini-3-pro-preview",
-	"github-copilot": "gpt-4o",
-	openrouter: "openai/gpt-5.1-codex",
-	"vercel-ai-gateway": "anthropic/claude-opus-4-6",
-	xai: "grok-4-fast-non-reasoning",
-	groq: "openai/gpt-oss-120b",
-	cerebras: "zai-glm-4.6",
-	zai: "glm-4.6",
-	mistral: "devstral-medium-latest",
-	minimax: "MiniMax-M2.1",
-	"minimax-cn": "MiniMax-M2.1",
-	huggingface: "moonshotai/Kimi-K2.5",
-	opencode: "claude-opus-4-6",
-	"kimi-coding": "kimi-k2-thinking",
-};
 
 export interface ScopedModel {
 	model: Model<Api>;
@@ -453,9 +427,10 @@ export async function findInitialModel(options: {
 		};
 	}
 
-	// 3. Try saved default from settings
+	const availableModels = await modelRegistry.getAvailable();
+
 	if (defaultProvider && defaultModelId) {
-		const found = modelRegistry.find(defaultProvider, defaultModelId);
+		const found = availableModels.find((m) => m.provider === defaultProvider && m.id === defaultModelId);
 		if (found) {
 			model = found;
 			if (defaultThinkingLevel) {
@@ -466,19 +441,7 @@ export async function findInitialModel(options: {
 	}
 
 	// 4. Try first available model with valid API key
-	const availableModels = await modelRegistry.getAvailable();
-
 	if (availableModels.length > 0) {
-		// Try to find a default model from known providers
-		for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
-			const defaultId = defaultModelPerProvider[provider];
-			const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
-			if (match) {
-				return { model: match, thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
-			}
-		}
-
-		// If no default found, use first available
 		return { model: availableModels[0], thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
 	}
 
@@ -530,21 +493,7 @@ export async function restoreModelFromSession(
 	const availableModels = await modelRegistry.getAvailable();
 
 	if (availableModels.length > 0) {
-		// Try to find a default model from known providers
-		let fallbackModel: Model<Api> | undefined;
-		for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
-			const defaultId = defaultModelPerProvider[provider];
-			const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
-			if (match) {
-				fallbackModel = match;
-				break;
-			}
-		}
-
-		// If no default found, use first available
-		if (!fallbackModel) {
-			fallbackModel = availableModels[0];
-		}
+		const fallbackModel = availableModels[0];
 
 		if (shouldPrintMessages) {
 			console.log(chalk.dim(`Falling back to: ${fallbackModel.provider}/${fallbackModel.id}`));
