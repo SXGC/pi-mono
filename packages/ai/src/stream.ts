@@ -9,6 +9,7 @@ import type {
 	AssistantMessage,
 	AssistantMessageEventStream,
 	Context,
+	Message,
 	Model,
 	ProviderStreamOptions,
 	SimpleStreamOptions,
@@ -17,6 +18,222 @@ import type {
 import { AssistantMessageEventStream as EventStream } from "./utils/event-stream.js";
 
 export { getEnvApiKey } from "./env-api-keys.js";
+
+const TELEMETRY_DEBUG_ENV = ["LANGFUSE_DEBUG", "PI_TELEMETRY_DEBUG"] as const;
+
+function isTruthyEnv(value: string | undefined): boolean {
+	if (!value) return false;
+	return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
+function isTelemetryDebugEnabled(): boolean {
+	return TELEMETRY_DEBUG_ENV.some((name) => isTruthyEnv(process.env[name]));
+}
+
+function logStreamTelemetryDebug(message: string, details?: Record<string, unknown>): void {
+	if (!isTelemetryDebugEnabled()) return;
+	if (details) {
+		console.info(`[langfuse-telemetry] ${message}`, details);
+		return;
+	}
+	console.info(`[langfuse-telemetry] ${message}`);
+}
+
+const MAX_SERIALIZED_ATTRIBUTE_LENGTH = 120_000;
+const DEFAULT_TELEMETRY_USER_ID = "pi";
+
+function truncateText(text: string, maxLength = 8_000): string {
+	if (text.length <= maxLength) return text;
+	return `${text.slice(0, maxLength)}...[truncated ${text.length - maxLength} chars]`;
+}
+
+function serializeForAttribute(value: unknown): string | undefined {
+	try {
+		const serialized = typeof value === "string" ? value : JSON.stringify(value);
+		if (serialized.length <= MAX_SERIALIZED_ATTRIBUTE_LENGTH) {
+			return serialized;
+		}
+		return `${serialized.slice(0, MAX_SERIALIZED_ATTRIBUTE_LENGTH)}...[truncated ${serialized.length - MAX_SERIALIZED_ATTRIBUTE_LENGTH} chars]`;
+	} catch (error) {
+		logStreamTelemetryDebug("failed to serialize telemetry attribute", {
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return undefined;
+	}
+}
+
+function sanitizeMessagesForTelemetry(messages: Message[]): Array<Record<string, unknown>> {
+	return messages.map((message) => {
+		if (message.role === "user") {
+			const content =
+				typeof message.content === "string"
+					? truncateText(message.content)
+					: message.content.map((part) =>
+							part.type === "text"
+								? { type: "text", text: truncateText(part.text) }
+								: {
+										type: "image",
+										mimeType: part.mimeType,
+										data: `[base64:${part.data.length} chars]`,
+									},
+						);
+
+			return {
+				role: "user",
+				timestamp: message.timestamp,
+				content,
+			};
+		}
+
+		if (message.role === "assistant") {
+			return {
+				role: "assistant",
+				timestamp: message.timestamp,
+				content: message.content.map((part) => {
+					if (part.type === "text") {
+						return { type: "text", text: truncateText(part.text) };
+					}
+					if (part.type === "thinking") {
+						return { type: "thinking", thinking: truncateText(part.thinking) };
+					}
+					return {
+						type: "toolCall",
+						id: part.id,
+						name: part.name,
+						arguments: part.arguments,
+					};
+				}),
+			};
+		}
+
+		return {
+			role: "toolResult",
+			timestamp: message.timestamp,
+			toolCallId: message.toolCallId,
+			toolName: message.toolName,
+			isError: message.isError,
+			content: message.content.map((part) =>
+				part.type === "text"
+					? { type: "text", text: truncateText(part.text) }
+					: {
+							type: "image",
+							mimeType: part.mimeType,
+							data: `[base64:${part.data.length} chars]`,
+						},
+			),
+		};
+	});
+}
+
+function sanitizeAssistantMessageForTelemetry(message: AssistantMessage): Record<string, unknown> {
+	return {
+		role: message.role,
+		provider: message.provider,
+		model: message.model,
+		stopReason: message.stopReason,
+		errorMessage: message.errorMessage,
+		timestamp: message.timestamp,
+		content: message.content.map((part) => {
+			if (part.type === "text") {
+				return { type: "text", text: truncateText(part.text) };
+			}
+			if (part.type === "thinking") {
+				return { type: "thinking", thinking: truncateText(part.thinking) };
+			}
+			return {
+				type: "toolCall",
+				id: part.id,
+				name: part.name,
+				arguments: part.arguments,
+			};
+		}),
+	};
+}
+
+function resolveTelemetryUserId(options?: StreamOptions): string {
+	const metadata = options?.metadata;
+	if (!metadata) {
+		return DEFAULT_TELEMETRY_USER_ID;
+	}
+
+	const fromUserId = metadata.userId;
+	if (typeof fromUserId === "string" && fromUserId.trim().length > 0) {
+		return fromUserId;
+	}
+
+	const fromUserIdSnakeCase = metadata.user_id;
+	if (typeof fromUserIdSnakeCase === "string" && fromUserIdSnakeCase.trim().length > 0) {
+		return fromUserIdSnakeCase;
+	}
+
+	return DEFAULT_TELEMETRY_USER_ID;
+}
+
+function createLlmCallSpan<TApi extends Api>(
+	model: Model<TApi>,
+	context: Context,
+	options?: StreamOptions,
+): Span | undefined {
+	if (!isTelemetryEnabled()) {
+		logStreamTelemetryDebug("skip span creation: telemetry disabled in stream module", {
+			model: model.id,
+			provider: model.provider,
+			sessionId: options?.sessionId,
+		});
+		return undefined;
+	}
+
+	const tracer = getTracer();
+	if (!tracer) {
+		logStreamTelemetryDebug("skip span creation: tracer unavailable", {
+			model: model.id,
+			provider: model.provider,
+			sessionId: options?.sessionId,
+		});
+		return undefined;
+	}
+
+	const userId = resolveTelemetryUserId(options);
+	const serializedInput = serializeForAttribute({
+		systemPrompt: context.systemPrompt,
+		messages: sanitizeMessagesForTelemetry(context.messages),
+		tools: context.tools?.map((tool) => ({
+			name: tool.name,
+			description: tool.description,
+		})),
+	});
+
+	const attributes: Record<string, string | number | boolean> = {
+		"gen_ai.request.model": model.id,
+		"gen_ai.request.provider": model.provider,
+		"user.id": userId,
+		"langfuse.user.id": userId,
+	};
+
+	if (options?.sessionId) {
+		attributes["session.id"] = options.sessionId;
+		attributes["langfuse.session.id"] = options.sessionId;
+	}
+
+	if (serializedInput) {
+		attributes["langfuse.observation.input"] = serializedInput;
+		attributes["input.value"] = serializedInput;
+		attributes["langfuse.trace.input"] = serializedInput;
+	}
+
+	const span = tracer.startSpan("llm-call", {
+		attributes,
+	});
+
+	logStreamTelemetryDebug("llm-call span started", {
+		model: model.id,
+		provider: model.provider,
+		sessionId: options?.sessionId,
+		userId,
+	});
+
+	return span;
+}
 
 function resolveApiProvider(api: Api) {
 	const provider = getApiProvider(api);
@@ -33,25 +250,10 @@ export function stream<TApi extends Api>(
 ): AssistantMessageEventStream {
 	const provider = resolveApiProvider(model.api);
 	const eventStream = provider.stream(model, context, options as StreamOptions);
-
-	// Return unmodified stream if telemetry is not enabled
-	if (!isTelemetryEnabled()) {
+	const span = createLlmCallSpan(model, context, options as StreamOptions);
+	if (!span) {
 		return eventStream;
 	}
-
-	const tracer = getTracer();
-	if (!tracer) {
-		return eventStream;
-	}
-
-	// Create span for LLM call tracking
-	const span = tracer.startSpan("llm-call", {
-		attributes: {
-			"gen_ai.request.model": model.id,
-			"gen_ai.request.provider": model.provider,
-			...(options?.sessionId && { "session.id": options.sessionId }),
-		},
-	});
 
 	// Wrap the event stream to track completion and errors
 	return wrapStreamWithSpan(eventStream, span);
@@ -72,7 +274,13 @@ export function streamSimple<TApi extends Api>(
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
 	const provider = resolveApiProvider(model.api);
-	return provider.streamSimple(model, context, options);
+	const eventStream = provider.streamSimple(model, context, options);
+	const span = createLlmCallSpan(model, context, options);
+	if (!span) {
+		return eventStream;
+	}
+
+	return wrapStreamWithSpan(eventStream, span);
 }
 
 export async function completeSimple<TApi extends Api>(
@@ -102,11 +310,48 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 				if (event.type === "done") {
 					const msg = event.message;
 					try {
-						span.setAttributes({
+						const serializedOutput = serializeForAttribute(sanitizeAssistantMessageForTelemetry(msg));
+						const serializedUsageDetails = serializeForAttribute({
+							inputTokens: msg.usage.input,
+							outputTokens: msg.usage.output,
+							totalTokens: msg.usage.totalTokens,
+							reasoningTokens: 0,
+							cachedInputTokens: msg.usage.cacheRead,
+						});
+						const serializedCostDetails = serializeForAttribute({
+							input: msg.usage.cost.input,
+							output: msg.usage.cost.output,
+							cacheRead: msg.usage.cost.cacheRead,
+							cacheWrite: msg.usage.cost.cacheWrite,
+							total: msg.usage.cost.total,
+						});
+
+						const doneAttributes: Record<string, string | number | boolean> = {
 							"gen_ai.usage.input_tokens": msg.usage.input,
 							"gen_ai.usage.output_tokens": msg.usage.output,
+							"gen_ai.usage.total_tokens": msg.usage.totalTokens,
+							"gen_ai.usage.cached_input_tokens": msg.usage.cacheRead,
+							"gen_ai.usage.reasoning_tokens": 0,
+							"gen_ai.cost.input": msg.usage.cost.input,
+							"gen_ai.cost.output": msg.usage.cost.output,
+							"gen_ai.cost.cache_read": msg.usage.cost.cacheRead,
+							"gen_ai.cost.cache_write": msg.usage.cost.cacheWrite,
 							"gen_ai.cost.total": msg.usage.cost.total,
-						});
+						};
+
+						if (serializedUsageDetails) {
+							doneAttributes["langfuse.observation.usage_details"] = serializedUsageDetails;
+						}
+						if (serializedCostDetails) {
+							doneAttributes["langfuse.observation.cost_details"] = serializedCostDetails;
+						}
+						if (serializedOutput) {
+							doneAttributes["langfuse.observation.output"] = serializedOutput;
+							doneAttributes["output.value"] = serializedOutput;
+							doneAttributes["langfuse.trace.output"] = serializedOutput;
+						}
+
+						span.setAttributes(doneAttributes);
 					} catch (spanError) {
 						console.warn("Failed to set span attributes:", spanError);
 					}
@@ -119,6 +364,19 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 				// Record error on error event
 				else if (event.type === "error") {
 					try {
+						const serializedErrorOutput = serializeForAttribute({
+							role: "assistant",
+							stopReason: "error",
+							errorMessage: event.error.errorMessage,
+							timestamp: event.error.timestamp,
+						});
+						if (serializedErrorOutput) {
+							span.setAttributes({
+								"langfuse.observation.output": serializedErrorOutput,
+								"output.value": serializedErrorOutput,
+								"langfuse.trace.output": serializedErrorOutput,
+							});
+						}
 						if (event.error.errorMessage) {
 							span.recordException(new Error(event.error.errorMessage));
 						}
