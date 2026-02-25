@@ -24,6 +24,8 @@ import { buildMarkdownPayload, buildTaskCardResultPayload, buildTaskCardStartPay
 import type { ChannelStore } from "./store.js";
 import { createMomTools, setUploadFunction } from "./tools/index.js";
 
+const agentLog = log.createLogger("agent");
+
 export interface PendingMessage {
 	userName: string;
 	text: string;
@@ -64,7 +66,7 @@ function getMemory(channelDir: string): string {
 				parts.push(`### Global Workspace Memory\n${content}`);
 			}
 		} catch (error) {
-			log.logWarning("Failed to read workspace memory", `${workspaceMemoryPath}: ${error}`);
+			agentLog.warning("Failed to read workspace memory", `${workspaceMemoryPath}: ${error}`);
 		}
 	}
 
@@ -77,7 +79,7 @@ function getMemory(channelDir: string): string {
 				parts.push(`### Channel-Specific Memory\n${content}`);
 			}
 		} catch (error) {
-			log.logWarning("Failed to read channel memory", `${channelMemoryPath}: ${error}`);
+			agentLog.warning("Failed to read channel memory", `${channelMemoryPath}: ${error}`);
 		}
 	}
 
@@ -470,7 +472,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 	// Load existing messages
 	if (loadedSession.messages.length > 0) {
 		agent.replaceMessages(loadedSession.messages);
-		log.logInfo(`[${channelId}] Loaded ${loadedSession.messages.length} messages from context.jsonl`);
+		agentLog.info(`[${channelId}] Loaded ${loadedSession.messages.length} messages from context.jsonl`);
 	}
 
 	const resourceLoader: ResourceLoader = {
@@ -655,18 +657,18 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				}
 			}
 		} else if (event.type === "auto_compaction_start") {
-			log.logInfo(`Auto-compaction started (reason: ${(event as any).reason})`);
+			agentLog.info(`Auto-compaction started (reason: ${(event as any).reason})`);
 			queue.enqueue(() => ctx.respond("_Compacting context..._", false), "compaction start");
 		} else if (event.type === "auto_compaction_end") {
 			const compEvent = event as any;
 			if (compEvent.result) {
-				log.logInfo(`Auto-compaction complete: ${compEvent.result.tokensBefore} tokens compacted`);
+				agentLog.info(`Auto-compaction complete: ${compEvent.result.tokensBefore} tokens compacted`);
 			} else if (compEvent.aborted) {
-				log.logInfo("Auto-compaction aborted");
+				agentLog.info("Auto-compaction aborted");
 			}
 		} else if (event.type === "auto_retry_start") {
 			const retryEvent = event as any;
-			log.logWarning(`Retrying (${retryEvent.attempt}/${retryEvent.maxAttempts})`, retryEvent.errorMessage);
+			agentLog.warning(`Retrying (${retryEvent.attempt}/${retryEvent.maxAttempts})`, retryEvent.errorMessage);
 			queue.enqueue(
 				() => ctx.respond(`_Retrying (${retryEvent.attempt}/${retryEvent.maxAttempts})..._`, false),
 				"retry",
@@ -704,7 +706,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			// Exclude the current message (it will be added via prompt())
 			const syncedCount = syncLogToSessionManager(sessionManager, channelDir, ctx.message.ts);
 			if (syncedCount > 0) {
-				log.logInfo(`[${channelId}] Synced ${syncedCount} messages from log.jsonl`);
+				agentLog.info(`[${channelId}] Synced ${syncedCount} messages from log.jsonl`);
 			}
 
 			// Reload messages from context.jsonl
@@ -712,7 +714,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			const reloadedSession = sessionManager.buildSessionContext();
 			if (reloadedSession.messages.length > 0) {
 				agent.replaceMessages(reloadedSession.messages);
-				log.logInfo(`[${channelId}] Reloaded ${reloadedSession.messages.length} messages from context`);
+				agentLog.info(`[${channelId}] Reloaded ${reloadedSession.messages.length} messages from context`);
 			}
 
 			// Update system prompt with fresh memory, channel/user info, and skills
@@ -762,7 +764,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 							await fn();
 						} catch (err) {
 							const errMsg = err instanceof Error ? err.message : String(err);
-							log.logWarning(`Slack API error (${errorContext})`, errMsg);
+							agentLog.warning(`Slack API error (${errorContext})`, errMsg);
 							try {
 								await ctx.respondInThread(`_Error: ${errMsg}_`);
 							} catch {
@@ -783,8 +785,8 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			};
 
 			// Log context info
-			log.logInfo(`Context sizes - system: ${systemPrompt.length} chars, memory: ${memory.length} chars`);
-			log.logInfo(`Channels: ${ctx.channels.length}, Users: ${ctx.users.length}`);
+			agentLog.info(`Context sizes - system: ${systemPrompt.length} chars, memory: ${memory.length} chars`);
+			agentLog.info(`Channels: ${ctx.channels.length}, Users: ${ctx.users.length}`);
 
 			// Build user message with timestamp and username prefix
 			// Format: "[YYYY-MM-DD HH:MM:SS+HH:MM] [username]: message" so LLM knows when and who
@@ -844,7 +846,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 					await ctx.respondInThread(`_Error: ${runState.errorMessage}_`);
 				} catch (err) {
 					const errMsg = err instanceof Error ? err.message : String(err);
-					log.logWarning("Failed to post error message", errMsg);
+					agentLog.warning("Failed to post error message", errMsg);
 				}
 			} else {
 				// Final message update
@@ -860,10 +862,10 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				if (finalText.trim() === "[SILENT]" || finalText.trim().startsWith("[SILENT]")) {
 					try {
 						await ctx.deleteMessage();
-						log.logInfo("Silent response - deleted message and thread");
+						agentLog.info("Silent response - deleted message and thread");
 					} catch (err) {
 						const errMsg = err instanceof Error ? err.message : String(err);
-						log.logWarning("Failed to delete message for silent response", errMsg);
+						agentLog.warning("Failed to delete message for silent response", errMsg);
 					}
 				} else if (finalText.trim()) {
 					try {
@@ -874,7 +876,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 						await ctx.replaceMessage(mainText);
 					} catch (err) {
 						const errMsg = err instanceof Error ? err.message : String(err);
-						log.logWarning("Failed to replace message with final text", errMsg);
+						agentLog.warning("Failed to replace message with final text", errMsg);
 					}
 				}
 			}

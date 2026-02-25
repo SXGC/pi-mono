@@ -3,6 +3,8 @@ import { appendFile, writeFile } from "fs/promises";
 import { join } from "path";
 import * as log from "./log.js";
 
+const storeLog = log.createLogger("store");
+
 export interface Attachment {
 	original: string; // original filename from uploader
 	local: string; // path relative to working dir (e.g., "C12345/attachments/1732531234567_file.png")
@@ -86,7 +88,7 @@ export class ChannelStore {
 			const url = file.url_private_download || file.url_private;
 			if (!url) continue;
 			if (!file.name) {
-				log.logWarning("Attachment missing name, skipping", url);
+				storeLog.warning("Attachment missing name, skipping", url);
 				continue;
 			}
 
@@ -199,7 +201,7 @@ export class ChannelStore {
 				// Success - could add success logging here if we have context
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : String(error);
-				log.logWarning(`Failed to download attachment`, `${item.localPath}: ${errorMsg}`);
+				storeLog.warning("Failed to download attachment", `${item.localPath}: ${errorMsg}`);
 			}
 		}
 

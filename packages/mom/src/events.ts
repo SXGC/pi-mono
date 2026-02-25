@@ -5,6 +5,8 @@ import { join } from "path";
 import * as log from "./log.js";
 import type { SlackBot, SlackEvent } from "./slack.js";
 
+const eventsLog = log.createLogger("events");
+
 // ============================================================================
 // Event Types
 // ============================================================================
@@ -64,7 +66,7 @@ export class EventsWatcher {
 			mkdirSync(this.eventsDir, { recursive: true });
 		}
 
-		log.logInfo(`Events watcher starting, dir: ${this.eventsDir}`);
+		eventsLog.info(`Events watcher starting, dir: ${this.eventsDir}`);
 
 		// Scan existing files
 		this.scanExisting();
@@ -75,7 +77,7 @@ export class EventsWatcher {
 			this.debounce(filename, () => this.handleFileChange(filename));
 		});
 
-		log.logInfo(`Events watcher started, tracking ${this.knownFiles.size} files`);
+		eventsLog.info(`Events watcher started, tracking ${this.knownFiles.size} files`);
 	}
 
 	/**
@@ -107,7 +109,7 @@ export class EventsWatcher {
 		this.crons.clear();
 
 		this.knownFiles.clear();
-		log.logInfo("Events watcher stopped");
+		eventsLog.info("Events watcher stopped");
 	}
 
 	private debounce(filename: string, fn: () => void): void {
@@ -129,7 +131,7 @@ export class EventsWatcher {
 		try {
 			files = readdirSync(this.eventsDir).filter((f) => f.endsWith(".json"));
 		} catch (err) {
-			log.logWarning("Failed to read events directory", String(err));
+			eventsLog.warning("Failed to read events directory", String(err));
 			return;
 		}
 
@@ -157,7 +159,7 @@ export class EventsWatcher {
 	private handleDelete(filename: string): void {
 		if (!this.knownFiles.has(filename)) return;
 
-		log.logInfo(`Event file deleted: ${filename}`);
+		eventsLog.info(`Event file deleted: ${filename}`);
 		this.cancelScheduled(filename);
 		this.knownFiles.delete(filename);
 	}
@@ -197,7 +199,7 @@ export class EventsWatcher {
 		}
 
 		if (!event) {
-			log.logWarning(`Failed to parse event file after ${MAX_RETRIES} retries: ${filename}`, lastError?.message);
+			eventsLog.warning(`Failed to parse event file after ${MAX_RETRIES} retries: ${filename}`, lastError?.message);
 			this.deleteFile(filename);
 			return;
 		}
@@ -262,7 +264,7 @@ export class EventsWatcher {
 		try {
 			const stat = statSync(filePath);
 			if (stat.mtimeMs < this.startTime) {
-				log.logInfo(`Stale immediate event, deleting: ${filename}`);
+				eventsLog.info(`Stale immediate event, deleting: ${filename}`);
 				this.deleteFile(filename);
 				return;
 			}
@@ -271,7 +273,7 @@ export class EventsWatcher {
 			return;
 		}
 
-		log.logInfo(`Executing immediate event: ${filename}`);
+		eventsLog.info(`Executing immediate event: ${filename}`);
 		this.execute(filename, event);
 	}
 
@@ -281,17 +283,17 @@ export class EventsWatcher {
 
 		if (atTime <= now) {
 			// Past - delete without executing
-			log.logInfo(`One-shot event in the past, deleting: ${filename}`);
+			eventsLog.info(`One-shot event in the past, deleting: ${filename}`);
 			this.deleteFile(filename);
 			return;
 		}
 
 		const delay = atTime - now;
-		log.logInfo(`Scheduling one-shot event: ${filename} in ${Math.round(delay / 1000)}s`);
+		eventsLog.info(`Scheduling one-shot event: ${filename} in ${Math.round(delay / 1000)}s`);
 
 		const timer = setTimeout(() => {
 			this.timers.delete(filename);
-			log.logInfo(`Executing one-shot event: ${filename}`);
+			eventsLog.info(`Executing one-shot event: ${filename}`);
 			this.execute(filename, event);
 		}, delay);
 
@@ -301,16 +303,16 @@ export class EventsWatcher {
 	private handlePeriodic(filename: string, event: PeriodicEvent): void {
 		try {
 			const cron = new Cron(event.schedule, { timezone: event.timezone }, () => {
-				log.logInfo(`Executing periodic event: ${filename}`);
+				eventsLog.info(`Executing periodic event: ${filename}`);
 				this.execute(filename, event, false); // Don't delete periodic events
 			});
 
 			this.crons.set(filename, cron);
 
 			const next = cron.nextRun();
-			log.logInfo(`Scheduled periodic event: ${filename}, next run: ${next?.toISOString() ?? "unknown"}`);
+			eventsLog.info(`Scheduled periodic event: ${filename}, next run: ${next?.toISOString() ?? "unknown"}`);
 		} catch (err) {
-			log.logWarning(`Invalid cron schedule for ${filename}: ${event.schedule}`, String(err));
+			eventsLog.warning(`Invalid cron schedule for ${filename}: ${event.schedule}`, String(err));
 			this.deleteFile(filename);
 		}
 	}
@@ -348,7 +350,7 @@ export class EventsWatcher {
 			// Delete file after successful enqueue (immediate and one-shot)
 			this.deleteFile(filename);
 		} else if (!enqueued) {
-			log.logWarning(`Event queue full, discarded: ${filename}`);
+			eventsLog.warning(`Event queue full, discarded: ${filename}`);
 			// Still delete immediate/one-shot even if discarded
 			if (deleteAfter) {
 				this.deleteFile(filename);
@@ -363,7 +365,7 @@ export class EventsWatcher {
 		} catch (err) {
 			// ENOENT is fine (file already deleted), other errors are warnings
 			if (err instanceof Error && "code" in err && err.code !== "ENOENT") {
-				log.logWarning(`Failed to delete event file: ${filename}`, String(err));
+				eventsLog.warning(`Failed to delete event file: ${filename}`, String(err));
 			}
 		}
 		this.knownFiles.delete(filename);

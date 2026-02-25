@@ -6,6 +6,17 @@ export interface LogContext {
 	channelName?: string; // For display like #dev-team vs C16HET4EQ
 }
 
+export type LogModule = "system" | "observer" | "agent" | "slack" | "store" | "events";
+
+export interface ModuleLogger {
+	info(message: string): void;
+	warning(message: string, details?: string): void;
+	agentError(ctx: LogContext | "system", error: string): void;
+	backfillStart(channelCount: number): void;
+	backfillChannel(channelName: string, messageCount: number): void;
+	backfillComplete(totalMessages: number, durationMs: number): void;
+}
+
 function timestamp(): string {
 	const now = new Date();
 	const hh = String(now.getHours()).padStart(2, "0");
@@ -23,6 +34,10 @@ function formatContext(ctx: LogContext): string {
 	const channel = ctx.channelName || ctx.channelId;
 	const user = ctx.userName || "unknown";
 	return `[${channel.startsWith("#") ? channel : `#${channel}`}:${user}]`;
+}
+
+function formatModule(module: LogModule): string {
+	return `[${module}]`;
 }
 
 function truncate(text: string, maxLen: number): string {
@@ -159,13 +174,12 @@ export function logStopRequest(ctx: LogContext): void {
 	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ⊗ Stop requested - aborting`));
 }
 
-// System
-export function logInfo(message: string): void {
-	console.log(chalk.blue(`${timestamp()} [system] ${message}`));
+function logInfoWithModule(module: LogModule, message: string): void {
+	console.log(chalk.blue(`${timestamp()} ${formatModule(module)} ${message}`));
 }
 
-export function logWarning(message: string, details?: string): void {
-	console.log(chalk.yellow(`${timestamp()} [system] ⚠ ${message}`));
+function logWarningWithModule(module: LogModule, message: string, details?: string): void {
+	console.log(chalk.yellow(`${timestamp()} ${formatModule(module)} ⚠ ${message}`));
 	if (details) {
 		const indented = details
 			.split("\n")
@@ -175,14 +189,66 @@ export function logWarning(message: string, details?: string): void {
 	}
 }
 
-export function logAgentError(ctx: LogContext | "system", error: string): void {
-	const context = ctx === "system" ? "[system]" : formatContext(ctx);
+function logAgentErrorWithModule(module: LogModule, ctx: LogContext | "system", error: string): void {
+	const context = ctx === "system" ? formatModule(module) : `${formatModule(module)} ${formatContext(ctx)}`;
 	console.log(chalk.yellow(`${timestamp()} ${context} ✗ Agent error`));
 	const indented = error
 		.split("\n")
 		.map((line) => `           ${line}`)
 		.join("\n");
 	console.log(chalk.dim(indented));
+}
+
+function logBackfillStartWithModule(module: LogModule, channelCount: number): void {
+	console.log(chalk.blue(`${timestamp()} ${formatModule(module)} Backfilling ${channelCount} channels...`));
+}
+
+function logBackfillChannelWithModule(module: LogModule, channelName: string, messageCount: number): void {
+	console.log(chalk.blue(`${timestamp()} ${formatModule(module)}   #${channelName}: ${messageCount} messages`));
+}
+
+function logBackfillCompleteWithModule(module: LogModule, totalMessages: number, durationMs: number): void {
+	const duration = (durationMs / 1000).toFixed(1);
+	console.log(
+		chalk.blue(`${timestamp()} ${formatModule(module)} Backfill complete: ${totalMessages} messages in ${duration}s`),
+	);
+}
+
+export function createLogger(module: LogModule): ModuleLogger {
+	return {
+		info(message: string): void {
+			logInfoWithModule(module, message);
+		},
+		warning(message: string, details?: string): void {
+			logWarningWithModule(module, message, details);
+		},
+		agentError(ctx: LogContext | "system", error: string): void {
+			logAgentErrorWithModule(module, ctx, error);
+		},
+		backfillStart(channelCount: number): void {
+			logBackfillStartWithModule(module, channelCount);
+		},
+		backfillChannel(channelName: string, messageCount: number): void {
+			logBackfillChannelWithModule(module, channelName, messageCount);
+		},
+		backfillComplete(totalMessages: number, durationMs: number): void {
+			logBackfillCompleteWithModule(module, totalMessages, durationMs);
+		},
+	};
+}
+
+const systemLogger = createLogger("system");
+
+export function logInfo(message: string): void {
+	systemLogger.info(message);
+}
+
+export function logWarning(message: string, details?: string): void {
+	systemLogger.warning(message, details);
+}
+
+export function logAgentError(ctx: LogContext | "system", error: string): void {
+	systemLogger.agentError(ctx, error);
 }
 
 // Usage summary
@@ -258,14 +324,13 @@ export function logDisconnected(): void {
 
 // Backfill
 export function logBackfillStart(channelCount: number): void {
-	console.log(chalk.blue(`${timestamp()} [system] Backfilling ${channelCount} channels...`));
+	systemLogger.backfillStart(channelCount);
 }
 
 export function logBackfillChannel(channelName: string, messageCount: number): void {
-	console.log(chalk.blue(`${timestamp()} [system]   #${channelName}: ${messageCount} messages`));
+	systemLogger.backfillChannel(channelName, messageCount);
 }
 
 export function logBackfillComplete(totalMessages: number, durationMs: number): void {
-	const duration = (durationMs / 1000).toFixed(1);
-	console.log(chalk.blue(`${timestamp()} [system] Backfill complete: ${totalMessages} messages in ${duration}s`));
+	systemLogger.backfillComplete(totalMessages, durationMs);
 }

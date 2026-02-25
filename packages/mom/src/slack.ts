@@ -6,6 +6,8 @@ import { basename, join } from "path";
 import * as log from "./log.js";
 import type { Attachment, ChannelStore } from "./store.js";
 
+const slackLog = log.createLogger("slack");
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -116,7 +118,7 @@ class ChannelQueue {
 		try {
 			await work();
 		} catch (err) {
-			log.logWarning("Queue error", err instanceof Error ? err.message : String(err));
+			slackLog.warning("Queue error", err instanceof Error ? err.message : String(err));
 		}
 		this.processing = false;
 		this.processNext();
@@ -160,7 +162,7 @@ export class SlackBot {
 		this.botUserId = auth.user_id as string;
 
 		await Promise.all([this.fetchUsers(), this.fetchChannels()]);
-		log.logInfo(`Loaded ${this.channels.size} channels, ${this.users.size} users`);
+		slackLog.info(`Loaded ${this.channels.size} channels, ${this.users.size} users`);
 
 		await this.backfillAllChannels();
 
@@ -272,10 +274,10 @@ export class SlackBot {
 	enqueueEvent(event: SlackEvent): boolean {
 		const queue = this.getQueue(event.channel);
 		if (queue.size() >= 5) {
-			log.logWarning(`Event queue full for ${event.channel}, discarding: ${event.text.substring(0, 50)}`);
+			slackLog.warning(`Event queue full for ${event.channel}, discarding: ${event.text.substring(0, 50)}`);
 			return false;
 		}
-		log.logInfo(`Enqueueing event for ${event.channel}: ${event.text.substring(0, 50)}`);
+		slackLog.info(`Enqueueing event for ${event.channel}: ${event.text.substring(0, 50)}`);
 		queue.enqueue(() => this.handler.handleEvent(event, this, true));
 		return true;
 	}
@@ -325,7 +327,7 @@ export class SlackBot {
 
 			// Only trigger processing for messages AFTER startup (not replayed old messages)
 			if (this.startupTs && e.ts < this.startupTs) {
-				log.logInfo(
+				slackLog.info(
 					`[${e.channel}] Logged old message (pre-startup), not triggering: ${slackEvent.text.substring(0, 30)}`,
 				);
 				ack();
@@ -404,7 +406,7 @@ export class SlackBot {
 
 			// Only trigger processing for messages AFTER startup (not replayed old messages)
 			if (this.startupTs && e.ts < this.startupTs) {
-				log.logInfo(`[${e.channel}] Skipping old message (pre-startup): ${slackEvent.text.substring(0, 30)}`);
+				slackLog.info(`[${e.channel}] Skipping old message (pre-startup): ${slackEvent.text.substring(0, 30)}`);
 				ack();
 				return;
 			}
@@ -562,21 +564,21 @@ export class SlackBot {
 			}
 		}
 
-		log.logBackfillStart(channelsToBackfill.length);
+		slackLog.backfillStart(channelsToBackfill.length);
 
 		let totalMessages = 0;
 		for (const [channelId, channel] of channelsToBackfill) {
 			try {
 				const count = await this.backfillChannel(channelId);
-				if (count > 0) log.logBackfillChannel(channel.name, count);
+				if (count > 0) slackLog.backfillChannel(channel.name, count);
 				totalMessages += count;
 			} catch (error) {
-				log.logWarning(`Failed to backfill #${channel.name}`, String(error));
+				slackLog.warning(`Failed to backfill #${channel.name}`, String(error));
 			}
 		}
 
 		const durationMs = Date.now() - startTime;
-		log.logBackfillComplete(totalMessages, durationMs);
+		slackLog.backfillComplete(totalMessages, durationMs);
 	}
 
 	// ==========================================================================

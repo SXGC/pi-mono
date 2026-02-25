@@ -17,6 +17,8 @@ import {
 } from "./slack.js";
 import { ChannelStore } from "./store.js";
 
+const observerLog = log.createLogger("observer");
+
 // ============================================================================
 // Config
 // ============================================================================
@@ -92,14 +94,16 @@ await validateSandbox(sandbox);
 
 const settingsManager = new MomSettingsManager(workingDir);
 const langfuseSettings = settingsManager.getLangfuseSettings();
-log.logInfo(
+observerLog.info(
 	`Langfuse telemetry settings: enabled=${langfuseSettings.enabled}, hasSecretKey=${!!langfuseSettings.secretKey}, hasPublicKey=${!!langfuseSettings.publicKey}`,
 );
 
 if (langfuseSettings.enabled) {
 	if (!langfuseSettings.secretKey || !langfuseSettings.publicKey) {
-		log.logWarning("Langfuse telemetry enabled but credentials not configured. Skipping telemetry initialization.");
-		log.logWarning(
+		observerLog.warning(
+			"Langfuse telemetry enabled but credentials not configured. Skipping telemetry initialization.",
+		);
+		observerLog.warning(
 			"Set LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY environment variables, or configure langfuse settings in workspace settings.json",
 		);
 	} else {
@@ -111,10 +115,10 @@ if (langfuseSettings.enabled) {
 		};
 
 		initTelemetry(config);
-		log.logInfo("Langfuse telemetry initialized successfully");
+		observerLog.info("Langfuse telemetry initialized successfully");
 	}
 } else {
-	log.logInfo("Langfuse telemetry disabled");
+	observerLog.info("Langfuse telemetry disabled");
 }
 
 // ============================================================================
@@ -317,7 +321,7 @@ const handler: MomHandler = {
 		state.running = true;
 		state.stopRequested = false;
 
-		log.logInfo(`[${event.channel}] Starting run: ${event.text.substring(0, 50)}`);
+		observerLog.info(`[${event.channel}] Starting run: ${event.text.substring(0, 50)}`);
 
 		try {
 			// Create context adapter
@@ -338,7 +342,7 @@ const handler: MomHandler = {
 				}
 			}
 		} catch (err) {
-			log.logWarning(`[${event.channel}] Run error`, err instanceof Error ? err.message : String(err));
+			observerLog.warning(`[${event.channel}] Run error`, err instanceof Error ? err.message : String(err));
 		} finally {
 			state.running = false;
 		}
@@ -367,14 +371,14 @@ eventsWatcher.start();
 
 // Handle shutdown
 process.on("SIGINT", async () => {
-	log.logInfo("Shutting down...");
+	observerLog.info("Shutting down...");
 	eventsWatcher.stop();
 	await shutdownTelemetry();
 	process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
-	log.logInfo("Shutting down...");
+	observerLog.info("Shutting down...");
 	eventsWatcher.stop();
 	await shutdownTelemetry();
 	process.exit(0);
