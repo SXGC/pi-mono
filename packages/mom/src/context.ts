@@ -165,6 +165,13 @@ export interface MomBranchSummarySettings {
 	reserveTokens: number;
 }
 
+export interface MomLangfuseSettings {
+	enabled: boolean;
+	secretKey?: string;
+	publicKey?: string;
+	baseUrl?: string;
+}
+
 export interface MomSettings {
 	defaultProvider?: string;
 	defaultModel?: string;
@@ -173,6 +180,7 @@ export interface MomSettings {
 	retry?: Partial<MomRetrySettings>;
 	images?: Partial<MomImageSettings>;
 	branchSummary?: Partial<MomBranchSummarySettings>;
+	langfuse?: MomLangfuseSettings;
 	shellCommandPrefix?: string;
 	theme?: string;
 }
@@ -317,6 +325,10 @@ export class MomSettingsManager {
 
 	getTheme(): string | undefined {
 		return this.settings.theme;
+	}
+
+	getLangfuseSettings(): MomLangfuseSettings {
+		return this.settings.langfuse ?? { enabled: false };
 	}
 
 	reload(): void {

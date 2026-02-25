@@ -1,4 +1,5 @@
 import { SocketModeClient } from "@slack/socket-mode";
+import type { KnownBlock } from "@slack/types";
 import { WebClient } from "@slack/web-api";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { basename, join } from "path";
@@ -59,11 +60,15 @@ export interface SlackContext {
 	respond: (text: string, shouldLog?: boolean) => Promise<void>;
 	replaceMessage: (text: string) => Promise<void>;
 	respondInThread: (text: string) => Promise<void>;
+	respondBlocksInThread: (blocks: SlackBlock[], fallbackText: string) => Promise<string | undefined>;
+	updateThreadBlocks: (threadMessageTs: string, blocks: SlackBlock[], fallbackText: string) => Promise<void>;
 	setTyping: (isTyping: boolean) => Promise<void>;
 	uploadFile: (filePath: string, title?: string) => Promise<void>;
 	setWorking: (working: boolean) => Promise<void>;
 	deleteMessage: () => Promise<void>;
 }
+
+export type SlackBlock = KnownBlock;
 
 export interface MomHandler {
 	/**
@@ -189,8 +194,17 @@ export class SlackBot {
 		return result.ts as string;
 	}
 
+	async postMessageBlocks(channel: string, text: string, blocks: SlackBlock[]): Promise<string> {
+		const result = await this.webClient.chat.postMessage({ channel, text, blocks });
+		return result.ts as string;
+	}
+
 	async updateMessage(channel: string, ts: string, text: string): Promise<void> {
 		await this.webClient.chat.update({ channel, ts, text });
+	}
+
+	async updateMessageBlocks(channel: string, ts: string, text: string, blocks: SlackBlock[]): Promise<void> {
+		await this.webClient.chat.update({ channel, ts, text, blocks });
 	}
 
 	async deleteMessage(channel: string, ts: string): Promise<void> {
@@ -199,6 +213,16 @@ export class SlackBot {
 
 	async postInThread(channel: string, threadTs: string, text: string): Promise<string> {
 		const result = await this.webClient.chat.postMessage({ channel, thread_ts: threadTs, text });
+		return result.ts as string;
+	}
+
+	async postInThreadBlocks(channel: string, threadTs: string, text: string, blocks: SlackBlock[]): Promise<string> {
+		const result = await this.webClient.chat.postMessage({
+			channel,
+			thread_ts: threadTs,
+			text,
+			blocks,
+		});
 		return result.ts as string;
 	}
 

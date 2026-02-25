@@ -20,6 +20,7 @@ import { MomSettingsManager, syncLogToSessionManager } from "./context.js";
 import * as log from "./log.js";
 import { createExecutor, type SandboxConfig } from "./sandbox.js";
 import type { ChannelInfo, SlackContext, UserInfo } from "./slack.js";
+import { buildMarkdownPayload, buildTaskCardResultPayload, buildTaskCardStartPayload } from "./slack-blocks.js";
 import type { ChannelStore } from "./store.js";
 import { createMomTools, setUploadFunction } from "./tools/index.js";
 
@@ -506,7 +507,16 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			enqueue(fn: () => Promise<void>, errorContext: string): void;
 			enqueueMessage(text: string, target: "main" | "thread", errorContext: string, doLog?: boolean): void;
 		} | null,
-		pendingTools: new Map<string, { toolName: string; args: unknown; startTime: number }>(),
+		pendingTools: new Map<
+			string,
+			{
+				toolName: string;
+				args: Record<string, unknown>;
+				label: string;
+				startTime: number;
+				messageTs?: string;
+			}
+		>(),
 		totalUsage: {
 			input: 0,
 			output: 0,
@@ -527,17 +537,26 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 		if (event.type === "tool_execution_start") {
 			const agentEvent = event as AgentEvent & { type: "tool_execution_start" };
-			const args = agentEvent.args as { label?: string };
-			const label = args.label || agentEvent.toolName;
-
-			pendingTools.set(agentEvent.toolCallId, {
+			const args = (agentEvent.args ?? {}) as Record<string, unknown>;
+			const label = typeof args.label === "string" ? args.label : agentEvent.toolName;
+			const argsFormatted = formatToolArgsForSlack(agentEvent.toolName, args);
+			const pendingTool = {
 				toolName: agentEvent.toolName,
-				args: agentEvent.args,
+				args,
+				label,
 				startTime: Date.now(),
-			});
+				messageTs: undefined as string | undefined,
+			};
 
-			log.logToolStart(logCtx, agentEvent.toolName, label, agentEvent.args as Record<string, unknown>);
-			queue.enqueue(() => ctx.respond(`_→ ${label}_`, false), "tool label");
+			pendingTools.set(agentEvent.toolCallId, pendingTool);
+
+			log.logToolStart(logCtx, agentEvent.toolName, label, args);
+			const payload = buildTaskCardStartPayload(agentEvent.toolName, label, argsFormatted);
+			queue.enqueue(async () => {
+				const ts = await ctx.respondBlocksInThread(payload.blocks, payload.fallbackText);
+				if (!ts) return;
+				pendingTool.messageTs = ts;
+			}, "tool start block");
 		} else if (event.type === "tool_execution_end") {
 			const agentEvent = event as AgentEvent & { type: "tool_execution_end" };
 			const resultStr = extractToolResultText(agentEvent.result);
@@ -552,19 +571,25 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				log.logToolSuccess(logCtx, agentEvent.toolName, durationMs, resultStr);
 			}
 
-			// Post args + result to thread
-			const label = pending?.args ? (pending.args as { label?: string }).label : undefined;
-			const argsFormatted = pending
-				? formatToolArgsForSlack(agentEvent.toolName, pending.args as Record<string, unknown>)
-				: "(args not found)";
-			const duration = (durationMs / 1000).toFixed(1);
-			let threadMessage = `*${agentEvent.isError ? "✗" : "✓"} ${agentEvent.toolName}*`;
-			if (label) threadMessage += `: ${label}`;
-			threadMessage += ` (${duration}s)\n`;
-			if (argsFormatted) threadMessage += `\`\`\`\n${argsFormatted}\n\`\`\`\n`;
-			threadMessage += `*Result:*\n\`\`\`\n${resultStr}\n\`\`\``;
+			const argsFormatted = pending ? formatToolArgsForSlack(agentEvent.toolName, pending.args) : "(args not found)";
+			const label = pending?.label || agentEvent.toolName;
+			const status = agentEvent.isError ? "error" : "complete";
+			const payload = buildTaskCardResultPayload(
+				agentEvent.toolName,
+				label,
+				status,
+				argsFormatted,
+				resultStr,
+				durationMs,
+			);
 
-			queue.enqueueMessage(threadMessage, "thread", "tool result thread", false);
+			queue.enqueue(async () => {
+				if (pending?.messageTs) {
+					await ctx.updateThreadBlocks(pending.messageTs, payload.blocks, payload.fallbackText);
+					return;
+				}
+				await ctx.respondBlocksInThread(payload.blocks, payload.fallbackText);
+			}, "tool result block");
 
 			if (agentEvent.isError) {
 				queue.enqueue(() => ctx.respond(`_Error: ${truncate(resultStr, 200)}_`, false), "tool error");
@@ -613,14 +638,20 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 				for (const thinking of thinkingParts) {
 					log.logThinking(logCtx, thinking);
-					queue.enqueueMessage(`_${thinking}_`, "main", "thinking main");
-					queue.enqueueMessage(`_${thinking}_`, "thread", "thinking thread", false);
+					const payload = buildMarkdownPayload(thinking, "thinking");
+					queue.enqueue(
+						() => ctx.respondBlocksInThread(payload.blocks, payload.fallbackText).then(() => undefined),
+						"thinking thread block",
+					);
 				}
 
 				if (text.trim()) {
 					log.logResponse(logCtx, text);
-					queue.enqueueMessage(text, "main", "response main");
-					queue.enqueueMessage(text, "thread", "response thread", false);
+					const payload = buildMarkdownPayload(text, "text");
+					queue.enqueue(
+						() => ctx.respondBlocksInThread(payload.blocks, payload.fallbackText).then(() => undefined),
+						"response thread block",
+					);
 				}
 			}
 		} else if (event.type === "auto_compaction_start") {

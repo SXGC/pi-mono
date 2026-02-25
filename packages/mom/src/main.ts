@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 
+import { initTelemetry, shutdownTelemetry, type TelemetryConfig } from "@mariozechner/pi-ai";
 import { join, resolve } from "path";
 import { type AgentRunner, getOrCreateRunner } from "./agent.js";
+import { MomSettingsManager } from "./context.js";
 import { downloadChannel } from "./download.js";
 import { createEventsWatcher } from "./events.js";
 import * as log from "./log.js";
 import { parseSandboxArg, type SandboxConfig, validateSandbox } from "./sandbox.js";
-import { type MomHandler, type SlackBot, SlackBot as SlackBotClass, type SlackEvent } from "./slack.js";
+import {
+	type MomHandler,
+	type SlackBlock,
+	type SlackBot,
+	SlackBot as SlackBotClass,
+	type SlackEvent,
+} from "./slack.js";
 import { ChannelStore } from "./store.js";
 
 // ============================================================================
@@ -77,6 +85,37 @@ if (!MOM_SLACK_APP_TOKEN || !MOM_SLACK_BOT_TOKEN) {
 }
 
 await validateSandbox(sandbox);
+
+// ============================================================================
+// Telemetry
+// ============================================================================
+
+const settingsManager = new MomSettingsManager(workingDir);
+const langfuseSettings = settingsManager.getLangfuseSettings();
+log.logInfo(
+	`Langfuse telemetry settings: enabled=${langfuseSettings.enabled}, hasSecretKey=${!!langfuseSettings.secretKey}, hasPublicKey=${!!langfuseSettings.publicKey}`,
+);
+
+if (langfuseSettings.enabled) {
+	if (!langfuseSettings.secretKey || !langfuseSettings.publicKey) {
+		log.logWarning("Langfuse telemetry enabled but credentials not configured. Skipping telemetry initialization.");
+		log.logWarning(
+			"Set LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY environment variables, or configure langfuse settings in workspace settings.json",
+		);
+	} else {
+		const config: TelemetryConfig = {
+			enabled: true,
+			secretKey: langfuseSettings.secretKey,
+			publicKey: langfuseSettings.publicKey,
+			baseUrl: langfuseSettings.baseUrl,
+		};
+
+		initTelemetry(config);
+		log.logInfo("Langfuse telemetry initialized successfully");
+	}
+} else {
+	log.logInfo("Langfuse telemetry disabled");
+}
 
 // ============================================================================
 // State (per channel)
@@ -176,6 +215,26 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 					const ts = await slack.postInThread(event.channel, messageTs, text);
 					threadMessageTs.push(ts);
 				}
+			});
+			await updatePromise;
+		},
+
+		respondBlocksInThread: async (blocks: SlackBlock[], fallbackText: string) => {
+			let postedTs: string | undefined;
+			updatePromise = updatePromise.then(async () => {
+				if (messageTs) {
+					const ts = await slack.postInThreadBlocks(event.channel, messageTs, fallbackText, blocks);
+					threadMessageTs.push(ts);
+					postedTs = ts;
+				}
+			});
+			await updatePromise;
+			return postedTs;
+		},
+
+		updateThreadBlocks: async (threadMessageTs: string, blocks: SlackBlock[], fallbackText: string) => {
+			updatePromise = updatePromise.then(async () => {
+				await slack.updateMessageBlocks(event.channel, threadMessageTs, fallbackText, blocks);
 			});
 			await updatePromise;
 		},
@@ -307,15 +366,17 @@ const eventsWatcher = createEventsWatcher(workingDir, bot);
 eventsWatcher.start();
 
 // Handle shutdown
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
 	log.logInfo("Shutting down...");
 	eventsWatcher.stop();
+	await shutdownTelemetry();
 	process.exit(0);
 });
 
-process.on("SIGTERM", () => {
+process.on("SIGTERM", async () => {
 	log.logInfo("Shutting down...");
 	eventsWatcher.stop();
+	await shutdownTelemetry();
 	process.exit(0);
 });
 

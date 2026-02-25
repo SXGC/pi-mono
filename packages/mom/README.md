@@ -11,7 +11,7 @@ A Slack bot powered by an LLM that can execute bash commands, read/write files, 
 - **Docker Sandbox**: Isolate mom in a container (recommended for all use)
 - **Persistent Workspace**: All conversation history, files, and tools stored in one directory you control
 - **Working Memory & Custom Tools**: Mom remembers context across sessions and creates workflow-specific CLI tools ([aka "skills"](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/)) for your tasks
-- **Thread-Based Details**: Clean main messages with verbose tool details in threads
+- **Thread-Based Block Kit Details**: Clean main messages with Block Kit cards for thinking/tool execution in threads
 
 ## Documentation
 
@@ -135,6 +135,13 @@ Mom is a Node.js app that runs on your host machine. She connects to Slack via S
    - Attach files to her response
 4. Any files or tools mom creates are stored in the channel's directory
 5. Mom's direct reply is stored in `log.jsonl`, while details like tool call results are kept in `context.jsonl` which she'll see and thus "remember" on subsequent requests
+
+**Slack Rendering Model:**
+- Main message stays concise and is updated to the final answer
+- Thread messages carry execution details via Block Kit
+  - Thinking output is rendered as labeled text blocks
+  - Tool execution is rendered as task cards: `in_progress` → `complete`/`error`
+- `log.jsonl` remains final-message focused and is not flooded with intermediate Block Kit status updates
 
 **Context Management:**
 - Mom has limited context depending on the LLM model used. E.g. Claude Opus or Sonnet 4.5 can process a maximum of 200k tokens
