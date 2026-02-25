@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added OpenTelemetry/Langfuse telemetry support for LLM call tracking via `initTelemetry()` and related APIs
+
 ## [0.54.2] - 2026-02-23
 
 ## [0.54.1] - 2026-02-22

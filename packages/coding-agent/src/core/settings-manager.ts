@@ -10,6 +10,13 @@ export interface CompactionSettings {
 	keepRecentTokens?: number; // default: 20000
 }
 
+export interface LangfuseSettings {
+	enabled: boolean;
+	secretKey?: string;
+	publicKey?: string;
+	baseUrl?: string;
+}
+
 export interface BranchSummarySettings {
 	reserveTokens?: number; // default: 16384 (tokens reserved for prompt + LLM response)
 }
@@ -91,6 +98,7 @@ export interface Settings {
 	autocompleteMaxVisible?: number; // Max visible items in autocomplete dropdown (default: 5)
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
+	langfuse?: LangfuseSettings;
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -892,5 +900,15 @@ export class SettingsManager {
 
 	getCodeBlockIndent(): string {
 		return this.settings.markdown?.codeBlockIndent ?? "  ";
+	}
+
+	getLangfuseSettings(): LangfuseSettings {
+		return this.settings.langfuse ?? { enabled: false };
+	}
+
+	setLangfuseSettings(settings: LangfuseSettings): void {
+		this.globalSettings.langfuse = settings;
+		this.markModified("langfuse");
+		this.save();
 	}
 }

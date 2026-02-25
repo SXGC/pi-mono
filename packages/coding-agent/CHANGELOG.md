@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added OpenTelemetry/Langfuse telemetry support for session, turn, tool, and LLM call tracing via `langfuse` settings
+
 ## [0.54.2] - 2026-02-23
 
 ### Fixed

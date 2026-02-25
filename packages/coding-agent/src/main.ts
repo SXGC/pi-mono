@@ -31,6 +31,7 @@ import { allTools } from "./core/tools/index.js";
 import { runMigrations, showDeprecationWarnings } from "./migrations.js";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.js";
 import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.js";
+import { initCodingAgentTelemetry } from "./telemetry/index.js";
 
 /**
  * Read all content from piped stdin.
@@ -556,6 +557,20 @@ export async function main(args: string[]) {
 	reportSettingsErrors(settingsManager, "startup");
 	const authStorage = AuthStorage.create();
 	const modelRegistry = new ModelRegistry(authStorage, getModelsPath());
+
+	// Initialize telemetry if langfuse is enabled
+	const langfuseSettings = settingsManager.getLangfuseSettings();
+	if (langfuseSettings.enabled) {
+		if (!langfuseSettings.secretKey || !langfuseSettings.publicKey) {
+			console.warn(
+				chalk.yellow(
+					"Langfuse telemetry enabled but credentials not configured. Skipping telemetry initialization.",
+				),
+			);
+		} else {
+			initCodingAgentTelemetry(langfuseSettings);
+		}
+	}
 
 	const resourceLoader = new DefaultResourceLoader({
 		cwd,

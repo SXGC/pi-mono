@@ -27,6 +27,7 @@ import type { AssistantMessage, ImageContent, Message, Model, TextContent } from
 import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@mariozechner/pi-ai";
 import { getDocsPath } from "../config.js";
 import { theme } from "../modes/interactive/theme/theme.js";
+import { startSessionSpan, startToolSpan, startTurnSpan } from "../telemetry/index.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";
 import { sleep } from "../utils/sleep.js";
 import { type BashResult, executeBash as executeBashCommand, executeBashWithOperations } from "./bash-executor.js";
@@ -262,6 +263,10 @@ export class AgentSession {
 	private _extensionErrorListener?: ExtensionErrorListener;
 	private _extensionErrorUnsubscriber?: () => void;
 
+	// Telemetry spans
+	private _currentSessionSpan: ReturnType<typeof startSessionSpan> = undefined;
+	private _currentTurnSpans: Map<number, ReturnType<typeof startTurnSpan>> = new Map();
+	private _currentToolSpans: Map<string, import("@opentelemetry/api").Span> = new Map();
 	// Model registry for API key resolution
 	private _modelRegistry: ModelRegistry;
 
@@ -427,10 +432,51 @@ export class AgentSession {
 
 	/** Emit extension events based on agent events */
 	private async _emitExtensionEvent(event: AgentEvent): Promise<void> {
+		// Handle telemetry spans (independent of extension runner)
+		if (event.type === "agent_start") {
+			this._turnIndex = 0;
+			this._currentSessionSpan = startSessionSpan(this.sessionId);
+		} else if (event.type === "turn_start") {
+			const turnSpan = startTurnSpan(this.sessionId, this._turnIndex, this._currentSessionSpan);
+			if (turnSpan) {
+				this._currentTurnSpans.set(this._turnIndex, turnSpan);
+			}
+		} else if (event.type === "turn_end") {
+			const turnSpan = this._currentTurnSpans.get(this._turnIndex);
+			if (turnSpan) {
+				turnSpan.end();
+				this._currentTurnSpans.delete(this._turnIndex);
+			}
+		} else if (event.type === "agent_end") {
+			if (this._currentSessionSpan) {
+				this._currentSessionSpan.end();
+				this._currentSessionSpan = undefined;
+			}
+		} else if (event.type === "tool_execution_start") {
+			// Create tool span as child of current turn span
+			const parentSpan = this._currentTurnSpans.get(this._turnIndex);
+			const toolSpan = startToolSpan(event.toolName, parentSpan);
+			if (toolSpan) {
+				toolSpan.setAttributes({
+					"tool.call_id": event.toolCallId,
+				});
+				this._currentToolSpans.set(event.toolCallId, toolSpan);
+			}
+		} else if (event.type === "tool_execution_end") {
+			// End tool span
+			const toolSpan = this._currentToolSpans.get(event.toolCallId);
+			if (toolSpan) {
+				toolSpan.setAttributes({
+					"tool.is_error": event.isError,
+				});
+				toolSpan.end();
+				this._currentToolSpans.delete(event.toolCallId);
+			}
+		}
+
 		if (!this._extensionRunner) return;
 
 		if (event.type === "agent_start") {
-			this._turnIndex = 0;
 			await this._extensionRunner.emit({ type: "agent_start" });
 		} else if (event.type === "agent_end") {
 			await this._extensionRunner.emit({ type: "agent_end", messages: event.messages });

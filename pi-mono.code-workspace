@@ -5,7 +5,8 @@
 			"path": "."
 		},
 		{
-			"path": "../../moms"
+			"name": "mom-conf",
+			"path": "/Users/cai/.pi"
 		}
 	],
 	"settings": {}

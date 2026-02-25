@@ -42,6 +42,7 @@ Unified LLM API with automatic model discovery, provider configuration, token an
   - [Login Flow Example](#login-flow-example)
   - [Using OAuth Tokens](#using-oauth-tokens)
   - [Provider Notes](#provider-notes)
+- [Telemetry](#telemetry)
 - [License](#license)
 
 ## Supported Providers
@@ -1181,5 +1182,61 @@ Add an entry to `packages/ai/CHANGELOG.md` under `## [Unreleased]`:
 ```
 
 ## License
+
+## Telemetry
+
+The library supports OpenTelemetry-based telemetry for tracking LLM calls via Langfuse. Enable it to trace token usage, costs, and model interactions.
+
+### Setup
+
+Set environment variables:
+
+```bash
+export LANGFUSE_SECRET_KEY=sk-lf-...
+export LANGFUSE_PUBLIC_KEY=pk-lf-...
+export LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional, for self-hosted
+```
+
+Or configure programmatically:
+
+```typescript
+import { initTelemetry, stream, shutdownTelemetry } from '@mariozechner/pi-ai';
+
+// Initialize telemetry
+const shutdown = initTelemetry({
+  enabled: true,
+  secretKey: 'sk-lf-...',
+  publicKey: 'pk-lf-...',
+  baseUrl: 'https://cloud.langfuse.com'
+});
+
+// All subsequent LLM calls are traced
+const model = getModel('openai', 'gpt-4o-mini');
+const s = stream(model, context);
+
+// ... use stream ...
+
+// Shutdown when done (flushes pending traces)
+await shutdown();
+```
+
+### Traced Data
+
+Each LLM call creates a span with:
+
+- `gen_ai.request.model`: Model ID
+- `gen_ai.request.provider`: Provider name
+- `session.id`: Optional session identifier
+- `gen_ai.usage.input_tokens`: Input token count
+- `gen_ai.usage.output_tokens`: Output token count
+- `gen_ai.cost.total`: Total cost in USD
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
+| `LANGFUSE_BASE_URL` | Langfuse server URL (default: `https://cloud.langfuse.com`) |
 
 MIT

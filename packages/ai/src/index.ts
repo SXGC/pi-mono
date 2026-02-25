@@ -13,6 +13,7 @@ export * from "./providers/openai-completions.js";
 export * from "./providers/openai-responses.js";
 export * from "./providers/register-builtins.js";
 export * from "./stream.js";
+export * from "./telemetry/index.js";
 export * from "./types.js";
 export * from "./utils/event-stream.js";
 export * from "./utils/json-parse.js";

@@ -247,6 +247,34 @@ Use `/settings` to modify common options, or edit JSON files directly:
 
 See [docs/settings.md](docs/settings.md) for all options.
 
+### Langfuse Telemetry
+
+Track sessions, turns, tool executions, and LLM calls via Langfuse:
+
+```json
+{
+  "langfuse": {
+    "enabled": true,
+    "secretKey": "sk-lf-...",
+    "publicKey": "pk-lf-...",
+    "baseUrl": "https://cloud.langfuse.com"
+  }
+}
+```
+
+Or use environment variables:
+
+```bash
+export LANGFUSE_SECRET_KEY=sk-lf-...
+export LANGFUSE_PUBLIC_KEY=pk-lf-...
+export LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional
+```
+
+When enabled, pi traces:
+- Sessions and turns with session/turn IDs
+- Tool executions with name, call ID, and error status
+- LLM calls with model, provider, tokens, and cost
+
 ---
 
 ## Context Files
