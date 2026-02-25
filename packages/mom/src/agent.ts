@@ -12,7 +12,7 @@ import {
 	SessionManager,
 	type Skill,
 } from "@mariozechner/pi-coding-agent";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
@@ -40,6 +40,176 @@ export interface AgentRunner {
 		pendingMessages?: PendingMessage[],
 	): Promise<{ stopReason: string; errorMessage?: string }>;
 	abort(): void;
+	executeBuiltinCommand(name: string, args: string): Promise<BuiltinCommandResult>;
+}
+
+type AvailableModel = ReturnType<ModelRegistry["getAvailable"]>[number];
+
+interface BuiltinCommandRuntime {
+	modelRegistry: ModelRegistry;
+	currentModel: AvailableModel | undefined;
+	setModel(model: AvailableModel): Promise<void>;
+	newSession(): Promise<boolean>;
+	isStreaming: boolean;
+	abort(): Promise<void>;
+	showStatus(message: string): void;
+	showError(message: string): void;
+}
+
+export interface BuiltinCommandResult {
+	handled: boolean;
+	success?: boolean;
+	message?: string;
+	error?: string;
+}
+
+function findExactModelMatch(searchTerm: string, modelRegistry: ModelRegistry): AvailableModel | undefined {
+	const term = searchTerm.trim().toLowerCase();
+	if (!term) return undefined;
+
+	let targetProvider: string | undefined;
+	let targetModelId: string;
+
+	if (term.includes("/")) {
+		const parts = term.split("/", 2);
+		targetProvider = parts[0]?.trim();
+		targetModelId = parts[1]?.trim() ?? "";
+	} else {
+		targetModelId = term;
+	}
+
+	if (!targetModelId) return undefined;
+
+	const models = modelRegistry.getAvailable();
+	const exactMatches = models.filter((model) => {
+		const idMatch = model.id.toLowerCase() === targetModelId;
+		const providerMatch = !targetProvider || model.provider.toLowerCase() === targetProvider;
+		return idMatch && providerMatch;
+	});
+
+	return exactMatches.length === 1 ? exactMatches[0] : undefined;
+}
+
+function findModelCandidates(searchTerm: string, modelRegistry: ModelRegistry, limit: number = 5): AvailableModel[] {
+	const term = searchTerm.trim().toLowerCase();
+	const models = modelRegistry.getAvailable();
+
+	return models
+		.filter((m) => m.id.toLowerCase().includes(term) || m.provider.toLowerCase().includes(term))
+		.slice(0, limit);
+}
+
+function formatModelStatus(currentModel: AvailableModel | undefined, availableModels: AvailableModel[]): string {
+	if (!currentModel) {
+		return `No model selected. ${availableModels.length} models available.`;
+	}
+	return `Current model: ${currentModel.provider}/${currentModel.id}`;
+}
+
+function formatModelNotFound(searchTerm: string, candidates: AvailableModel[]): string {
+	if (candidates.length === 0) {
+		return `No model found matching "${searchTerm}". Use "/model" to see available models.`;
+	}
+
+	const candidateList = candidates.map((m) => `  - ${m.provider}/${m.id}`).join("\n");
+	return `No exact match for "${searchTerm}". Did you mean:\n${candidateList}`;
+}
+
+function toErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+async function handleModelCommand(args: string, runtime: BuiltinCommandRuntime): Promise<BuiltinCommandResult> {
+	const searchTerm = args.trim();
+
+	if (!searchTerm) {
+		const availableModels = runtime.modelRegistry.getAvailable();
+		return {
+			handled: true,
+			success: true,
+			message: formatModelStatus(runtime.currentModel, availableModels),
+		};
+	}
+
+	const model = findExactModelMatch(searchTerm, runtime.modelRegistry);
+	if (!model) {
+		const candidates = findModelCandidates(searchTerm, runtime.modelRegistry);
+		return {
+			handled: true,
+			success: false,
+			message: formatModelNotFound(searchTerm, candidates),
+		};
+	}
+
+	try {
+		await runtime.setModel(model);
+		return {
+			handled: true,
+			success: true,
+			message: `Switched model to ${model.provider}/${model.id}`,
+		};
+	} catch (error) {
+		return {
+			handled: true,
+			success: false,
+			error: toErrorMessage(error),
+		};
+	}
+}
+
+async function handleNewCommand(args: string, runtime: BuiltinCommandRuntime): Promise<BuiltinCommandResult> {
+	if (args.trim()) {
+		return {
+			handled: true,
+			success: false,
+			message: "Usage: /new (no arguments)",
+		};
+	}
+
+	try {
+		if (runtime.isStreaming) {
+			await runtime.abort();
+		}
+
+		const success = await runtime.newSession();
+		if (success) {
+			return {
+				handled: true,
+				success: true,
+				message: "New session started",
+			};
+		}
+
+		return {
+			handled: true,
+			success: false,
+			message: "New session cancelled by extension",
+		};
+	} catch (error) {
+		return {
+			handled: true,
+			success: false,
+			error: toErrorMessage(error),
+		};
+	}
+}
+
+async function tryBuiltinCommand(
+	name: string,
+	args: string,
+	runtime: BuiltinCommandRuntime,
+): Promise<BuiltinCommandResult> {
+	const commandName = name.trim().toLowerCase();
+
+	if (commandName === "model") {
+		return handleModelCommand(args, runtime);
+	}
+
+	if (commandName === "new") {
+		return handleNewCommand(args, runtime);
+	}
+
+	return { handled: false };
 }
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
@@ -713,6 +883,72 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		return parts;
 	};
 
+	const builtinRuntime: BuiltinCommandRuntime = {
+		get modelRegistry() {
+			return modelRegistry;
+		},
+		get currentModel() {
+			return agent.state.model;
+		},
+		async setModel(model) {
+			const apiKey = await modelRegistry.getApiKey(model);
+			if (!apiKey) {
+				throw new Error(`No API key for ${model.provider}/${model.id}`);
+			}
+			agent.setModel(model);
+			sessionManager.appendModelChange(model.provider, model.id);
+			settingsManager.setDefaultModelAndProvider(model.provider, model.id);
+			agentLog.info(`[${channelId}] Model changed to ${model.provider}/${model.id}`);
+		},
+		async newSession() {
+			await resetSession();
+			return true;
+		},
+		get isStreaming() {
+			return agent.state.isStreaming;
+		},
+		async abort() {
+			agent.abort();
+			await agent.waitForIdle();
+		},
+		showStatus(message) {
+			agentLog.info(`[${channelId}] Status: ${message}`);
+		},
+		showError(message) {
+			agentLog.warning(`[${channelId}] Error: ${message}`);
+		},
+	};
+
+	async function resetSession(): Promise<void> {
+		if (agent.state.isStreaming) {
+			agent.abort();
+			await agent.waitForIdle();
+		}
+
+		const archiveDir = join(channelDir, "archive");
+		if (!existsSync(archiveDir)) {
+			mkdirSync(archiveDir, { recursive: true });
+		}
+
+		const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+		const contextFile = join(channelDir, "context.jsonl");
+		const logFile = join(channelDir, "log.jsonl");
+
+		if (existsSync(contextFile)) {
+			renameSync(contextFile, join(archiveDir, `context.${timestamp}.jsonl`));
+		}
+		if (existsSync(logFile)) {
+			renameSync(logFile, join(archiveDir, `log.${timestamp}.jsonl`));
+		}
+
+		writeFileSync(contextFile, "");
+		writeFileSync(logFile, "");
+
+		agent.replaceMessages([]);
+
+		agentLog.info(`[${channelId}] Session reset, archived to ${timestamp}`);
+	}
+
 	return {
 		async run(
 			ctx: SlackContext,
@@ -939,6 +1175,10 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 		abort(): void {
 			session.abort();
+		},
+
+		async executeBuiltinCommand(name: string, args: string): Promise<BuiltinCommandResult> {
+			return tryBuiltinCommand(name, args, builtinRuntime);
 		},
 	};
 }

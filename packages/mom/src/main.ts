@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { initTelemetry, shutdownTelemetry, type TelemetryConfig } from "@mariozechner/pi-ai";
+import * as piAi from "@mariozechner/pi-ai";
 import { join, resolve } from "path";
 import { type AgentRunner, getOrCreateRunner } from "./agent.js";
 import { MomSettingsManager } from "./context.js";
@@ -18,6 +18,22 @@ import {
 import { ChannelStore } from "./store.js";
 
 const observerLog = log.createLogger("observer");
+
+interface TelemetryConfig {
+	enabled: boolean;
+	secretKey: string;
+	publicKey: string;
+	baseUrl?: string;
+}
+
+interface TelemetryApi {
+	initTelemetry?: (config: TelemetryConfig) => void;
+	shutdownTelemetry?: () => Promise<void>;
+}
+
+const telemetryApi = piAi as unknown as TelemetryApi;
+const initTelemetry = telemetryApi.initTelemetry ?? (() => {});
+const shutdownTelemetry = telemetryApi.shutdownTelemetry ?? (async () => {});
 
 // ============================================================================
 // Config
@@ -300,6 +316,10 @@ const handler: MomHandler = {
 	isRunning(channelId: string): boolean {
 		const state = channelStates.get(channelId);
 		return state?.running ?? false;
+	},
+
+	getRunner(channelId: string): AgentRunner | undefined {
+		return getState(channelId).runner;
 	},
 
 	async handleStop(channelId: string, slack: SlackBot): Promise<void> {

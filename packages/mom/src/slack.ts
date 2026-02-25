@@ -3,6 +3,7 @@ import type { KnownBlock } from "@slack/types";
 import { WebClient } from "@slack/web-api";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { basename, join } from "path";
+import type { AgentRunner } from "./agent.js";
 import * as log from "./log.js";
 import type { Attachment, ChannelStore } from "./store.js";
 
@@ -90,6 +91,25 @@ export interface MomHandler {
 	 * Called when user says "stop" while mom is running
 	 */
 	handleStop(channelId: string, slack: SlackBot): Promise<void>;
+
+	getRunner(channelId: string): AgentRunner | undefined;
+}
+
+function parseSlashCommand(text: string): { name: string; args: string } | null {
+	if (!text.startsWith("/")) return null;
+
+	const trimmed = text.trim();
+	const spaceIndex = trimmed.indexOf(" ");
+
+	const name = (spaceIndex === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIndex)).trim().toLowerCase();
+	const args = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1);
+
+	if (!name) return null;
+	return { name, args };
+}
+
+function isBuiltinCommand(name: string): boolean {
+	return name === "model" || name === "new";
 }
 
 // ============================================================================
@@ -345,6 +365,27 @@ export class SlackBot {
 				return;
 			}
 
+			const parsed = parseSlashCommand(slackEvent.text);
+			if (parsed && isBuiltinCommand(parsed.name)) {
+				this.getQueue(e.channel).enqueue(async () => {
+					const runner = this.handler.getRunner(e.channel);
+					if (!runner) {
+						await this.postMessage(e.channel, "_No runner available_");
+						return;
+					}
+
+					const result = await runner.executeBuiltinCommand(parsed.name, parsed.args);
+					if (result.message) {
+						await this.postMessage(e.channel, result.success ? result.message : `_${result.message}_`);
+					}
+					if (result.error) {
+						await this.postMessage(e.channel, `_Error: ${result.error}_`);
+					}
+				});
+				ack();
+				return;
+			}
+
 			// SYNC: Check if busy
 			if (this.handler.isRunning(e.channel)) {
 				this.postMessage(e.channel, "_Already working. Say `@mom stop` to cancel._");
@@ -420,6 +461,27 @@ export class SlackBot {
 					} else {
 						this.postMessage(e.channel, "_Nothing running_");
 					}
+					ack();
+					return;
+				}
+
+				const parsed = parseSlashCommand(slackEvent.text);
+				if (parsed && isBuiltinCommand(parsed.name)) {
+					this.getQueue(e.channel).enqueue(async () => {
+						const runner = this.handler.getRunner(e.channel);
+						if (!runner) {
+							await this.postMessage(e.channel, "_No runner available_");
+							return;
+						}
+
+						const result = await runner.executeBuiltinCommand(parsed.name, parsed.args);
+						if (result.message) {
+							await this.postMessage(e.channel, result.success ? result.message : `_${result.message}_`);
+						}
+						if (result.error) {
+							await this.postMessage(e.channel, `_Error: ${result.error}_`);
+						}
+					});
 					ack();
 					return;
 				}

@@ -12,9 +12,18 @@ export {
 	type SessionStats,
 } from "./agent-session.js";
 export { type BashExecutorOptions, type BashResult, executeBash, executeBashWithOperations } from "./bash-executor.js";
+export {
+	type BuiltinCommandResult,
+	type BuiltinCommandRuntime,
+	tryBuiltinCommand,
+} from "./command-dispatcher.js";
+// Builtin command system
+export {
+	isBuiltinCommand,
+	parseSlashCommand,
+} from "./command-parser.js";
 export type { CompactionResult } from "./compaction/index.js";
 export { createEventBus, type EventBus, type EventBusController } from "./event-bus.js";
-
 // Extensions system
 export {
 	type AgentEndEvent,
@@ -59,3 +68,9 @@ export {
 	type TurnStartEvent,
 	wrapToolsWithExtensions,
 } from "./extensions/index.js";
+export {
+	findExactModelMatch,
+	findModelCandidates,
+	formatModelNotFound,
+	formatModelStatus,
+} from "./model-matcher.js";

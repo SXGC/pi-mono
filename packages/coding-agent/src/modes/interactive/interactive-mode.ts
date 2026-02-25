@@ -61,6 +61,13 @@ import type {
 	ExtensionWidgetOptions,
 } from "../../core/extensions/index.js";
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.js";
+import {
+	type BuiltinCommandResult,
+	type BuiltinCommandRuntime,
+	isBuiltinCommand,
+	parseSlashCommand,
+	tryBuiltinCommand,
+} from "../../core/index.js";
 import { type AppAction, KeybindingsManager } from "../../core/keybindings.js";
 import { createCompactionSummaryMessage } from "../../core/messages.js";
 import { resolveModelScope } from "../../core/model-resolver.js";
@@ -250,6 +257,28 @@ export class InteractiveMode {
 	}
 	private get settingsManager() {
 		return this.session.settingsManager;
+	}
+
+	private get builtinRuntime(): BuiltinCommandRuntime {
+		return {
+			modelRegistry: this.session.modelRegistry,
+			currentModel: this.session.model,
+			setModel: async (model) => {
+				await this.session.setModel(model);
+				this.footer.invalidate();
+				this.updateEditorBorderColor();
+			},
+			newSession: async () => {
+				await this.session.newSession();
+				return true;
+			},
+			isStreaming: this.session.isStreaming,
+			abort: async () => {
+				await this.session.abort();
+			},
+			showStatus: (message) => this.showStatus(message),
+			showError: (message) => this.showError(message),
+		};
 	}
 
 	constructor(
@@ -1870,6 +1899,7 @@ export class InteractiveMode {
 		this.defaultEditor.onSubmit = async (text: string) => {
 			text = text.trim();
 			if (!text) return;
+			const parsed = parseSlashCommand(text);
 
 			// Handle commands
 			if (text === "/settings") {
@@ -1882,12 +1912,24 @@ export class InteractiveMode {
 				await this.showModelsSelector();
 				return;
 			}
-			if (text === "/model" || text.startsWith("/model ")) {
-				const searchTerm = text.startsWith("/model ") ? text.slice(7).trim() : undefined;
+
+			if (parsed && isBuiltinCommand(parsed.name) && (parsed.name === "model" || parsed.name === "new")) {
 				this.editor.setText("");
-				await this.handleModelCommand(searchTerm);
-				return;
+				const result: BuiltinCommandResult = await tryBuiltinCommand(parsed.name, parsed.args, this.builtinRuntime);
+				if (result.handled) {
+					if (result.message) {
+						result.success ? this.showStatus(result.message) : this.showError(result.message);
+					}
+					if (result.error) {
+						this.showError(result.error);
+					}
+					if (parsed.name === "new" && result.success) {
+						await this.clearSessionUI();
+					}
+					return;
+				}
 			}
+
 			if (text.startsWith("/export")) {
 				await this.handleExportCommand(text);
 				this.editor.setText("");
@@ -1941,11 +1983,6 @@ export class InteractiveMode {
 			if (text === "/logout") {
 				this.showOAuthSelector("logout");
 				this.editor.setText("");
-				return;
-			}
-			if (text === "/new") {
-				this.editor.setText("");
-				await this.handleClearCommand();
 				return;
 			}
 			if (text === "/compact" || text.startsWith("/compact ")) {
@@ -3156,56 +3193,6 @@ export class InteractiveMode {
 		});
 	}
 
-	private async handleModelCommand(searchTerm?: string): Promise<void> {
-		if (!searchTerm) {
-			this.showModelSelector();
-			return;
-		}
-
-		const model = await this.findExactModelMatch(searchTerm);
-		if (model) {
-			try {
-				await this.session.setModel(model);
-				this.footer.invalidate();
-				this.updateEditorBorderColor();
-				this.showStatus(`Model: ${model.id}`);
-				this.checkDaxnutsEasterEgg(model);
-			} catch (error) {
-				this.showError(error instanceof Error ? error.message : String(error));
-			}
-			return;
-		}
-
-		this.showModelSelector(searchTerm);
-	}
-
-	private async findExactModelMatch(searchTerm: string): Promise<Model<any> | undefined> {
-		const term = searchTerm.trim();
-		if (!term) return undefined;
-
-		let targetProvider: string | undefined;
-		let targetModelId = "";
-
-		if (term.includes("/")) {
-			const parts = term.split("/", 2);
-			targetProvider = parts[0]?.trim().toLowerCase();
-			targetModelId = parts[1]?.trim().toLowerCase() ?? "";
-		} else {
-			targetModelId = term.toLowerCase();
-		}
-
-		if (!targetModelId) return undefined;
-
-		const models = await this.getModelCandidates();
-		const exactMatches = models.filter((item) => {
-			const idMatch = item.id.toLowerCase() === targetModelId;
-			const providerMatch = !targetProvider || item.provider.toLowerCase() === targetProvider;
-			return idMatch && providerMatch;
-		});
-
-		return exactMatches.length === 1 ? exactMatches[0] : undefined;
-	}
-
 	private async getModelCandidates(): Promise<Model<any>[]> {
 		if (this.session.scopedModels.length > 0) {
 			return this.session.scopedModels.map((scoped) => scoped.model);
@@ -4143,16 +4130,13 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private async handleClearCommand(): Promise<void> {
+	private async clearSessionUI(): Promise<void> {
 		// Stop loading animation
 		if (this.loadingAnimation) {
 			this.loadingAnimation.stop();
 			this.loadingAnimation = undefined;
 		}
 		this.statusContainer.clear();
-
-		// New session via session (emits extension session events)
-		await this.session.newSession();
 
 		// Clear UI state
 		this.chatContainer.clear();
@@ -4165,6 +4149,18 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(`${theme.fg("accent", "✓ New session started")}`, 1, 1));
 		this.ui.requestRender();
+	}
+
+	private async handleClearCommand(): Promise<void> {
+		const result = await tryBuiltinCommand("new", "", this.builtinRuntime);
+		if (result.success) {
+			await this.clearSessionUI();
+		} else if (result.message) {
+			this.showError(result.message);
+		}
+		if (result.error) {
+			this.showError(result.error);
+		}
 	}
 
 	private handleDebugCommand(): void {

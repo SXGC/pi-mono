@@ -89,6 +89,31 @@ Options:
   --sandbox=docker:<name>     Run tools in Docker container (recommended)
 ```
 
+## Commands
+
+Mom supports the following slash commands:
+
+### /model - Display or switch model
+
+Display current model or switch to a different one.
+
+```
+/model [provider/modelId]
+```
+
+- No arguments: Shows current model information
+- With argument: Switches to the specified model (e.g., `/model anthropic/claude-sonnet-4-20250514`)
+
+### /new - Start new session
+
+Archive current session and start fresh.
+
+```
+/new
+```
+
+- Archives current session history to `archive/` directory
+- Clears context and starts a new conversation
 ## Environment Variables
 
 | Variable | Description |
