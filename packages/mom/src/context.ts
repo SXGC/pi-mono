@@ -157,12 +157,24 @@ export interface MomRetrySettings {
 	baseDelayMs: number;
 }
 
+export interface MomImageSettings {
+	autoResize: boolean;
+}
+
+export interface MomBranchSummarySettings {
+	reserveTokens: number;
+}
+
 export interface MomSettings {
 	defaultProvider?: string;
 	defaultModel?: string;
 	defaultThinkingLevel?: "off" | "minimal" | "low" | "medium" | "high";
 	compaction?: Partial<MomCompactionSettings>;
 	retry?: Partial<MomRetrySettings>;
+	images?: Partial<MomImageSettings>;
+	branchSummary?: Partial<MomBranchSummarySettings>;
+	shellCommandPrefix?: string;
+	theme?: string;
 }
 
 const DEFAULT_COMPACTION: MomCompactionSettings = {
@@ -175,6 +187,14 @@ const DEFAULT_RETRY: MomRetrySettings = {
 	enabled: true,
 	maxRetries: 3,
 	baseDelayMs: 2000,
+};
+
+const DEFAULT_IMAGES: MomImageSettings = {
+	autoResize: true,
+};
+
+const DEFAULT_BRANCH_SUMMARY: MomBranchSummarySettings = {
+	reserveTokens: 16384,
 };
 
 /**
@@ -268,6 +288,39 @@ export class MomSettingsManager {
 	setDefaultThinkingLevel(level: string): void {
 		this.settings.defaultThinkingLevel = level as MomSettings["defaultThinkingLevel"];
 		this.save();
+	}
+
+	getImageAutoResize(): boolean {
+		return this.settings.images?.autoResize ?? DEFAULT_IMAGES.autoResize;
+	}
+
+	setImageAutoResize(enabled: boolean): void {
+		this.settings.images = { ...this.settings.images, autoResize: enabled };
+		this.save();
+	}
+
+	getShellCommandPrefix(): string | undefined {
+		return this.settings.shellCommandPrefix;
+	}
+
+	setShellCommandPrefix(prefix: string | undefined): void {
+		this.settings.shellCommandPrefix = prefix;
+		this.save();
+	}
+
+	getBranchSummarySettings(): MomBranchSummarySettings {
+		return {
+			...DEFAULT_BRANCH_SUMMARY,
+			...this.settings.branchSummary,
+		};
+	}
+
+	getTheme(): string | undefined {
+		return this.settings.theme;
+	}
+
+	reload(): void {
+		this.settings = this.load();
 	}
 
 	// Compatibility methods for AgentSession
