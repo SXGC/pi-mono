@@ -34,25 +34,63 @@ export function findExactModelMatch(searchTerm: string, modelRegistry: ModelRegi
 
 /**
  * 查找候选模型（用于错误提示）
+ * 按相关性排序：model id 精确匹配 > model id 开头匹配 > model id 包含匹配 > provider 匹配
  */
-export function findModelCandidates(searchTerm: string, modelRegistry: ModelRegistry, limit: number = 5): Model<Api>[] {
+export function findModelCandidates(
+	searchTerm: string,
+	modelRegistry: ModelRegistry,
+	limit: number = 10,
+): Model<Api>[] {
 	const term = searchTerm.trim().toLowerCase();
 	const models = modelRegistry.getAvailable();
 
-	// 模糊匹配: modelId 或 provider 包含搜索词
-	return models
-		.filter((m) => m.id.toLowerCase().includes(term) || m.provider.toLowerCase().includes(term))
-		.slice(0, limit);
+	// 计算每个模型的相关性分数
+	const scored = models
+		.map((m) => {
+			const modelId = m.id.toLowerCase();
+			const provider = m.provider.toLowerCase();
+			let score = 0;
+
+			// Model id 匹配（优先级更高）
+			if (modelId === term)
+				score = 100; // 精确匹配
+			else if (modelId.startsWith(term))
+				score = 80; // 开头匹配
+			else if (modelId.includes(term))
+				score = 60; // 包含匹配
+			// Provider 匹配（优先级较低）
+			else if (provider === term)
+				score = 40; // provider 精确匹配
+			else if (provider.includes(term)) score = 20; // provider 包含匹配
+
+			return { model: m, score };
+		})
+		.filter((item) => item.score > 0)
+		.sort((a, b) => b.score - a.score);
+
+	return scored.slice(0, limit).map((item) => item.model);
 }
 
 /**
  * 格式化模型状态（用于 /model 无参数时的显示）
  */
 export function formatModelStatus(currentModel: Model<Api> | undefined, availableModels: Model<Api>[]): string {
-	if (!currentModel) {
-		return `No model selected. ${availableModels.length} models available.`;
+	const lines: string[] = [];
+
+	if (currentModel) {
+		lines.push(`Current model: ${currentModel.provider}/${currentModel.id}`);
+	} else {
+		lines.push("No model selected.");
 	}
-	return `Current model: ${currentModel.provider}/${currentModel.id}`;
+
+	lines.push(`\nAvailable models (${availableModels.length}):`);
+	for (const model of availableModels) {
+		const marker =
+			currentModel && model.provider === currentModel.provider && model.id === currentModel.id ? " *" : "";
+		lines.push(`  - ${model.provider}/${model.id}${marker}`);
+	}
+
+	return lines.join("\n");
 }
 
 /**
