@@ -8,6 +8,8 @@ import {
 	convertToLlm,
 	createExtensionRuntime,
 	formatSkillsForPrompt,
+	type LoadSkillsResult,
+	loadSkills,
 	loadSkillsFromDir,
 	ModelRegistry,
 	type ResourceLoader,
@@ -94,8 +96,9 @@ function getMemory(channelDir: string): string {
 	return parts.join("\n\n");
 }
 
-function loadMomSkills(channelDir: string, workspacePath: string): Skill[] {
+function loadMomSkills(channelDir: string, workspacePath: string, sandboxConfig: SandboxConfig): LoadSkillsResult {
 	const skillMap = new Map<string, Skill>();
+	const diagnostics = [] as LoadSkillsResult["diagnostics"];
 
 	// channelDir is the host path (e.g., /Users/.../data/C0A34FL8PMH)
 	// hostWorkspacePath is the parent directory on host
@@ -110,24 +113,41 @@ function loadMomSkills(channelDir: string, workspacePath: string): Skill[] {
 		return hostPath;
 	};
 
+	const addSkills = (
+		result: LoadSkillsResult,
+		translateToWorkspacePath: boolean,
+		disableModelInvocation: boolean = false,
+	): void => {
+		diagnostics.push(...result.diagnostics);
+
+		for (const loadedSkill of result.skills) {
+			const skill: Skill = {
+				...loadedSkill,
+				filePath: translateToWorkspacePath ? translatePath(loadedSkill.filePath) : loadedSkill.filePath,
+				baseDir: translateToWorkspacePath ? translatePath(loadedSkill.baseDir) : loadedSkill.baseDir,
+				disableModelInvocation: disableModelInvocation ? true : loadedSkill.disableModelInvocation,
+			};
+
+			skillMap.set(skill.name, skill);
+		}
+	};
+
+	const builtinSkills = loadSkills({
+		cwd: hostWorkspacePath,
+		includeDefaults: false,
+		includeBuiltin: true,
+	});
+	addSkills(builtinSkills, false, sandboxConfig.type === "docker");
+
 	// Load workspace-level skills (global)
 	const workspaceSkillsDir = join(hostWorkspacePath, "skills");
-	for (const skill of loadSkillsFromDir({ dir: workspaceSkillsDir, source: "workspace" }).skills) {
-		// Translate paths to container paths for system prompt
-		skill.filePath = translatePath(skill.filePath);
-		skill.baseDir = translatePath(skill.baseDir);
-		skillMap.set(skill.name, skill);
-	}
+	addSkills(loadSkillsFromDir({ dir: workspaceSkillsDir, source: "workspace" }), true);
 
 	// Load channel-specific skills (override workspace skills on collision)
 	const channelSkillsDir = join(channelDir, "skills");
-	for (const skill of loadSkillsFromDir({ dir: channelSkillsDir, source: "channel" }).skills) {
-		skill.filePath = translatePath(skill.filePath);
-		skill.baseDir = translatePath(skill.baseDir);
-		skillMap.set(skill.name, skill);
-	}
+	addSkills(loadSkillsFromDir({ dir: channelSkillsDir, source: "channel" }), true);
 
-	return Array.from(skillMap.values());
+	return { skills: Array.from(skillMap.values()), diagnostics };
 }
 
 function buildSystemPrompt(
@@ -409,8 +429,10 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 	// Initial system prompt (will be updated each run with fresh memory/channels/users/skills)
 	const memory = getMemory(channelDir);
-	const skills = loadMomSkills(channelDir, workspacePath);
-	const systemPrompt = buildSystemPrompt(workspacePath, channelId, memory, sandboxConfig, [], [], skills);
+	const initialSkillLoadResult = loadMomSkills(channelDir, workspacePath, sandboxConfig);
+	let currentSkills = initialSkillLoadResult.skills;
+	let currentSkillDiagnostics = initialSkillLoadResult.diagnostics;
+	let currentSystemPrompt = buildSystemPrompt(workspacePath, channelId, memory, sandboxConfig, [], [], currentSkills);
 
 	// Create session manager and settings manager
 	// Use a fixed context.jsonl file per channel (not timestamped like coding-agent)
@@ -461,7 +483,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 	let agent: Agent;
 	agent = new Agent({
 		initialState: {
-			systemPrompt,
+			systemPrompt: currentSystemPrompt,
 			model: initialModel,
 			thinkingLevel: initialThinkingLevel,
 			tools,
@@ -501,11 +523,11 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 	const resourceLoader: ResourceLoader = {
 		getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
-		getSkills: () => ({ skills: [], diagnostics: [] }),
+		getSkills: () => ({ skills: currentSkills, diagnostics: currentSkillDiagnostics }),
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
-		getSystemPrompt: () => systemPrompt,
+		getSystemPrompt: () => currentSystemPrompt,
 		getAppendSystemPrompt: () => [],
 		getPathMetadata: () => new Map(),
 		extendResources: () => {},
@@ -810,7 +832,10 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 			// Update system prompt with fresh memory, channel/user info, and skills
 			const memory = getMemory(channelDir);
-			const skills = loadMomSkills(channelDir, workspacePath);
+			const skillLoadResult = loadMomSkills(channelDir, workspacePath, sandboxConfig);
+			const skills = skillLoadResult.skills;
+			currentSkills = skills;
+			currentSkillDiagnostics = skillLoadResult.diagnostics;
 			const systemPrompt = buildSystemPrompt(
 				workspacePath,
 				channelId,
@@ -820,6 +845,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				ctx.users,
 				skills,
 			);
+			currentSystemPrompt = systemPrompt;
 			session.agent.setSystemPrompt(systemPrompt);
 
 			// Set up file upload function
