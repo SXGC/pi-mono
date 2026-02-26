@@ -123,7 +123,9 @@ export interface DefaultResourceLoaderOptions {
 	extensionFactories?: ExtensionFactory[];
 	noExtensions?: boolean;
 	noSkills?: boolean;
+	noBuiltinSkills?: boolean;
 	noPromptTemplates?: boolean;
+
 	noThemes?: boolean;
 	systemPrompt?: string;
 	appendSystemPrompt?: string;
@@ -160,7 +162,9 @@ export class DefaultResourceLoader implements ResourceLoader {
 	private extensionFactories: ExtensionFactory[];
 	private noExtensions: boolean;
 	private noSkills: boolean;
+	private noBuiltinSkills: boolean;
 	private noPromptTemplates: boolean;
+
 	private noThemes: boolean;
 	private systemPromptSource?: string;
 	private appendSystemPromptSource?: string;
@@ -215,7 +219,9 @@ export class DefaultResourceLoader implements ResourceLoader {
 		this.extensionFactories = options.extensionFactories ?? [];
 		this.noExtensions = options.noExtensions ?? false;
 		this.noSkills = options.noSkills ?? false;
+		this.noBuiltinSkills = options.noBuiltinSkills ?? false;
 		this.noPromptTemplates = options.noPromptTemplates ?? false;
+
 		this.noThemes = options.noThemes ?? false;
 		this.systemPromptSource = options.systemPrompt;
 		this.appendSystemPromptSource = options.appendSystemPrompt;
@@ -460,6 +466,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 				agentDir: this.agentDir,
 				skillPaths,
 				includeDefaults: false,
+				includeBuiltin: !this.noBuiltinSkills,
 			});
 		}
 		const resolvedSkills = this.skillsOverride ? this.skillsOverride(skillsResult) : skillsResult;

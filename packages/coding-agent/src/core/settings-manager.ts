@@ -89,6 +89,7 @@ export interface Settings {
 	prompts?: string[]; // Array of local prompt template paths or directories
 	themes?: string[]; // Array of local theme file paths or directories
 	enableSkillCommands?: boolean; // default: true - register skills as /skill:name commands
+	builtinSkills?: boolean; // default: true - enable builtin skills
 	terminal?: TerminalSettings;
 	images?: ImageSettings;
 	enabledModels?: string[]; // Model patterns for cycling (same format as --models CLI flag)
@@ -785,6 +786,16 @@ export class SettingsManager {
 	setEnableSkillCommands(enabled: boolean): void {
 		this.globalSettings.enableSkillCommands = enabled;
 		this.markModified("enableSkillCommands");
+		this.save();
+	}
+
+	getBuiltinSkills(): boolean {
+		return this.settings.builtinSkills ?? true;
+	}
+
+	setBuiltinSkills(enabled: boolean): void {
+		this.globalSettings.builtinSkills = enabled;
+		this.markModified("builtinSkills");
 		this.save();
 	}
 

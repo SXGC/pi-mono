@@ -32,6 +32,7 @@ export interface Args {
 	print?: boolean;
 	export?: string;
 	noSkills?: boolean;
+	noBuiltinSkills?: boolean;
 	skills?: string[];
 	promptTemplates?: string[];
 	noPromptTemplates?: boolean;
@@ -138,6 +139,8 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.themes.push(args[++i]);
 		} else if (arg === "--no-skills" || arg === "-ns") {
 			result.noSkills = true;
+		} else if (arg === "--no-builtin-skills") {
+			result.noBuiltinSkills = true;
 		} else if (arg === "--no-prompt-templates" || arg === "-np") {
 			result.noPromptTemplates = true;
 		} else if (arg === "--no-themes") {
@@ -210,6 +213,7 @@ ${chalk.bold("Options:")}
   --no-extensions, -ne           Disable extension discovery (explicit -e paths still work)
   --skill <path>                 Load a skill file or directory (can be used multiple times)
   --no-skills, -ns               Disable skills discovery and loading
+  --no-builtin-skills           Disable builtin skills
   --prompt-template <path>       Load a prompt template file or directory (can be used multiple times)
   --no-prompt-templates, -np     Disable prompt template discovery and loading
   --theme <path>                 Load a theme file or directory (can be used multiple times)

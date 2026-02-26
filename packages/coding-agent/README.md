@@ -308,7 +308,8 @@ Place in `~/.pi/agent/prompts/`, `.pi/prompts/`, or a [pi package](#pi-packages)
 
 ### Skills
 
-On-demand capability packages following the [Agent Skills standard](https://agentskills.io). Invoke via `/skill:name` or let the agent load them automatically.
+On-demand capability packages following the [Agent Skills standard](https://agentskills.io). Invoke via `/skill:name` or let the agent load them automatically. Pi ships with a set of built-in skills for common workflows - use `/skill:` to explore available skills.
+
 
 ```markdown
 <!-- ~/.pi/agent/skills/my-skill/SKILL.md -->
