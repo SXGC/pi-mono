@@ -28,6 +28,17 @@ export interface RetrySettings {
 	maxDelayMs?: number; // default: 60000 (max server-requested delay before failing)
 }
 
+export interface FallbackModel {
+	provider: string; // Provider name
+	modelId: string; // Model ID
+}
+
+export interface FallbackSettings {
+	enabled?: boolean; // default: false
+	models?: FallbackModel[]; // Ordered list of fallback models
+	onFallbackExhausted?: "error" | "ask"; // default: "error"
+}
+
 export interface TerminalSettings {
 	showImages?: boolean; // default: true (only relevant if terminal supports images)
 	clearOnShrink?: boolean; // default: false (clear empty rows when content shrinks)
@@ -78,6 +89,7 @@ export interface Settings {
 	compaction?: CompactionSettings;
 	branchSummary?: BranchSummarySettings;
 	retry?: RetrySettings;
+	fallback?: FallbackSettings;
 	hideThinkingBlock?: boolean;
 	shellPath?: string; // Custom shell path (e.g., for Cygwin users on Windows)
 	quietStartup?: boolean;
@@ -641,6 +653,57 @@ export class SettingsManager {
 			maxRetries: this.settings.retry?.maxRetries ?? 3,
 			baseDelayMs: this.settings.retry?.baseDelayMs ?? 2000,
 			maxDelayMs: this.settings.retry?.maxDelayMs ?? 60000,
+		};
+	}
+
+	getFallbackEnabled(): boolean {
+		return this.settings.fallback?.enabled ?? false;
+	}
+
+	setFallbackEnabled(enabled: boolean): void {
+		if (!this.globalSettings.fallback) {
+			this.globalSettings.fallback = {};
+		}
+		this.globalSettings.fallback.enabled = enabled;
+		this.markModified("fallback", "enabled");
+		this.save();
+	}
+
+	getFallbackModels(): FallbackModel[] | undefined {
+		return this.settings.fallback?.models;
+	}
+
+	setFallbackModels(models: FallbackModel[] | undefined): void {
+		if (!this.globalSettings.fallback) {
+			this.globalSettings.fallback = {};
+		}
+		this.globalSettings.fallback.models = models;
+		this.markModified("fallback", "models");
+		this.save();
+	}
+
+	getFallbackOnExhausted(): "error" | "ask" {
+		return this.settings.fallback?.onFallbackExhausted ?? "error";
+	}
+
+	setFallbackOnExhausted(action: "error" | "ask"): void {
+		if (!this.globalSettings.fallback) {
+			this.globalSettings.fallback = {};
+		}
+		this.globalSettings.fallback.onFallbackExhausted = action;
+		this.markModified("fallback", "onFallbackExhausted");
+		this.save();
+	}
+
+	getFallbackSettings(): {
+		enabled: boolean;
+		models: FallbackModel[] | undefined;
+		onFallbackExhausted: "error" | "ask";
+	} {
+		return {
+			enabled: this.getFallbackEnabled(),
+			models: this.getFallbackModels(),
+			onFallbackExhausted: this.getFallbackOnExhausted(),
 		};
 	}
 

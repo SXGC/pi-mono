@@ -275,6 +275,35 @@ When enabled, pi traces:
 - Tool executions with name, call ID, and error status
 - LLM calls with model, provider, tokens, and cost
 
+### Model Fallback
+
+Automatically switch to alternative models when the current model fails with retryable errors (rate limits, server errors).
+
+```json
+{
+  "fallback": {
+    "enabled": true,
+    "models": [
+      { "provider": "anthropic", "modelId": "claude-sonnet-4-20250514" },
+      { "provider": "openai", "modelId": "gpt-4o" },
+      { "provider": "google", "modelId": "gemini-2.5-flash" }
+    ],
+    "onFallbackExhausted": "error"
+  }
+}
+```
+
+**Configuration:**
+- `enabled`: Enable/disable fallback (default: `false`)
+- `models`: Ordered list of fallback models (optional, auto-built if omitted)
+- `onFallbackExhausted`: Action when all models fail - `"error"` (fail) or `"ask"` (prompt user, default: `"error"`)
+
+**Behavior:**
+- Triggers after auto-retry exhausts attempts on the current model
+- Builds fallback chain: same provider models first, then other providers
+- Emits `fallback_start`/`fallback_end` events for UI integration
+- Resets on successful response (not error/aborted)
+
 ---
 
 ## Context Files

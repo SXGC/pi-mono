@@ -172,6 +172,17 @@ export interface MomLangfuseSettings {
 	baseUrl?: string;
 }
 
+export interface MomFallbackModel {
+	provider: string;
+	modelId: string;
+}
+
+export interface MomFallbackSettings {
+	enabled?: boolean;
+	models?: MomFallbackModel[];
+	onFallbackExhausted?: "error" | "ask";
+}
+
 export interface MomSettings {
 	defaultProvider?: string;
 	defaultModel?: string;
@@ -181,6 +192,7 @@ export interface MomSettings {
 	images?: Partial<MomImageSettings>;
 	branchSummary?: Partial<MomBranchSummarySettings>;
 	langfuse?: MomLangfuseSettings;
+	fallback?: MomFallbackSettings;
 	shellCommandPrefix?: string;
 	theme?: string;
 }
@@ -329,6 +341,54 @@ export class MomSettingsManager {
 
 	getLangfuseSettings(): MomLangfuseSettings {
 		return this.settings.langfuse ?? { enabled: false };
+	}
+
+	getFallbackEnabled(): boolean {
+		return this.settings.fallback?.enabled ?? false;
+	}
+
+	setFallbackEnabled(enabled: boolean): void {
+		if (!this.settings.fallback) {
+			this.settings.fallback = {};
+		}
+		this.settings.fallback.enabled = enabled;
+		this.save();
+	}
+
+	getFallbackModels(): MomFallbackModel[] | undefined {
+		return this.settings.fallback?.models;
+	}
+
+	setFallbackModels(models: MomFallbackModel[] | undefined): void {
+		if (!this.settings.fallback) {
+			this.settings.fallback = {};
+		}
+		this.settings.fallback.models = models;
+		this.save();
+	}
+
+	getFallbackOnExhausted(): "error" | "ask" {
+		return this.settings.fallback?.onFallbackExhausted ?? "error";
+	}
+
+	setFallbackOnExhausted(action: "error" | "ask"): void {
+		if (!this.settings.fallback) {
+			this.settings.fallback = {};
+		}
+		this.settings.fallback.onFallbackExhausted = action;
+		this.save();
+	}
+
+	getFallbackSettings(): {
+		enabled: boolean;
+		models: MomFallbackModel[] | undefined;
+		onFallbackExhausted: "error" | "ask";
+	} {
+		return {
+			enabled: this.getFallbackEnabled(),
+			models: this.getFallbackModels(),
+			onFallbackExhausted: this.getFallbackOnExhausted(),
+		};
 	}
 
 	reload(): void {

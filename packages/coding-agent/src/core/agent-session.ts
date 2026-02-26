@@ -121,7 +121,16 @@ export type AgentSessionEvent =
 			errorMessage?: string;
 	  }
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
-	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+	| {
+			type: "fallback_start";
+			fromModel: Model<any>;
+			toModel: Model<any>;
+			reason: string;
+			fallbackIndex: number;
+			totalFallbackModels: number;
+	  }
+	| { type: "fallback_end"; success: boolean; finalModel?: Model<any>; totalAttempts: number; finalError?: string };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -241,6 +250,11 @@ export class AgentSession {
 	private _retryAttempt = 0;
 	private _retryPromise: Promise<void> | undefined = undefined;
 	private _retryResolve: (() => void) | undefined = undefined;
+	// Fallback state
+	private _fallbackIndex = 0; // Current index in fallback chain
+	private _fallbackChain: Model<any>[] = []; // Resolved fallback models
+
+	private _totalFallbackAttempts = 0; // Total attempts across all models
 
 	// Bash execution state
 	private _bashAbortController: AbortController | undefined = undefined;
@@ -381,6 +395,21 @@ export class AgentSession {
 					});
 					this._retryAttempt = 0;
 					this._resolveRetry();
+				}
+
+				// Reset fallback state on successful response (not error or aborted)
+				if (
+					assistantMsg.stopReason !== "error" &&
+					assistantMsg.stopReason !== "aborted" &&
+					this._fallbackChain.length > 0
+				) {
+					this._emit({
+						type: "fallback_end",
+						success: true,
+						finalModel: this.model,
+						totalAttempts: this._totalFallbackAttempts,
+					});
+					this._resetFallbackState();
 				}
 			}
 		}
@@ -2158,7 +2187,7 @@ export class AgentSession {
 		}
 
 		if (this._retryAttempt > settings.maxRetries) {
-			// Max retries exceeded, emit final failure and reset
+			// Max retries exceeded - try fallback before giving up
 			this._emit({
 				type: "auto_retry_end",
 				success: false,
@@ -2167,6 +2196,14 @@ export class AgentSession {
 			});
 			this._retryAttempt = 0;
 			this._resolveRetry(); // Resolve so waitForRetry() completes
+
+			// Try fallback to another model
+			const fallbackSettings = this.settingsManager.getFallbackSettings();
+			if (fallbackSettings.enabled) {
+				const didFallback = await this._handleFallback(message.errorMessage || "Unknown error");
+				if (didFallback) return true; // Fallback initiated
+			}
+
 			return false;
 		}
 
@@ -2250,6 +2287,171 @@ export class AgentSession {
 	 */
 	setAutoRetryEnabled(enabled: boolean): void {
 		this.settingsManager.setRetryEnabled(enabled);
+	}
+
+	// =========================================================================
+	// Model Fallback
+	// =========================================================================
+
+	/**
+	 * Build the fallback chain of models.
+	 * Uses configured models if available, otherwise builds automatically from available models.
+	 */
+	private async _buildFallbackChain(): Promise<Model<any>[]> {
+		const settings = this.settingsManager.getFallbackSettings();
+		const availableModels = await this._modelRegistry.getAvailable();
+		const currentModel = this.model;
+
+		if (!currentModel) return [];
+
+		// If user configured explicit fallback models, use those
+		if (settings.models && settings.models.length > 0) {
+			const chain: Model<any>[] = [currentModel];
+			for (const fallbackModel of settings.models) {
+				const model = availableModels.find(
+					(m) => m.provider === fallbackModel.provider && m.id === fallbackModel.modelId,
+				);
+				if (model && !chain.some((m) => modelsAreEqual(m, model))) {
+					chain.push(model);
+				}
+			}
+			return chain;
+		}
+
+		// Build automatic fallback chain
+		const chain: Model<any>[] = [currentModel];
+
+		// 1. Same provider models (sorted by context window as proxy for capability)
+		const sameProvider = availableModels
+			.filter((m) => m.provider === currentModel.provider && !modelsAreEqual(m, currentModel))
+			.sort((a, b) => (b.contextWindow ?? 0) - (a.contextWindow ?? 0));
+		chain.push(...sameProvider);
+
+		// 2. Other providers' models with similar capabilities
+		const otherProviders = availableModels
+			.filter((m) => m.provider !== currentModel.provider)
+			.filter((m) => {
+				// Prefer models with similar reasoning capability
+				if (currentModel.reasoning && !m.reasoning) return false;
+				return true;
+			})
+			.sort((a, b) => (b.contextWindow ?? 0) - (a.contextWindow ?? 0));
+		chain.push(...otherProviders);
+
+		return chain;
+	}
+
+	/**
+	 * Check if there's a next fallback model available.
+	 */
+	private _hasNextFallbackModel(): boolean {
+		return this._fallbackIndex < this._fallbackChain.length - 1;
+	}
+
+	/**
+	 * Get the next fallback model.
+	 */
+	private _getNextFallbackModel(): Model<any> | undefined {
+		if (!this._hasNextFallbackModel()) return undefined;
+		this._fallbackIndex++;
+		return this._fallbackChain[this._fallbackIndex];
+	}
+
+	/**
+	 * Handle fallback to next model after retry exhausted.
+	 * @returns true if fallback was initiated, false if no more models available
+	 */
+	private async _handleFallback(errorMessage: string): Promise<boolean> {
+		const settings = this.settingsManager.getFallbackSettings();
+		if (!settings.enabled) return false;
+
+		// Build fallback chain if this is the first fallback attempt
+		if (this._fallbackChain.length === 0) {
+			this._fallbackChain = await this._buildFallbackChain();
+			this._fallbackIndex = 0;
+		}
+
+		// Get next fallback model
+		const nextModel = this._getNextFallbackModel();
+		if (!nextModel) {
+			// All fallback models exhausted
+			this._emit({
+				type: "fallback_end",
+				success: false,
+				finalModel: this.model,
+				totalAttempts: this._totalFallbackAttempts,
+				finalError: errorMessage,
+			});
+			return false;
+		}
+
+		// Verify new model has credentials
+		const apiKey = await this._modelRegistry.getApiKey(nextModel);
+		if (!apiKey) {
+			// Skip this model and try next
+			return this._handleFallback(errorMessage);
+		}
+
+		// Emit fallback_start event
+		this._emit({
+			type: "fallback_start",
+			fromModel: this.model!,
+			toModel: nextModel,
+			reason: errorMessage,
+			fallbackIndex: this._fallbackIndex,
+			totalFallbackModels: this._fallbackChain.length,
+		});
+
+		// Remove error message from agent state
+		const messages = this.agent.state.messages;
+		if (messages.length > 0 && messages[messages.length - 1].role === "assistant") {
+			this.agent.replaceMessages(messages.slice(0, -1));
+		}
+
+		// Switch to fallback model (without saving to settings - this is temporary)
+		this.agent.setModel(nextModel);
+		this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
+
+		// Re-clamp thinking level for new model's capabilities
+		this.setThinkingLevel(this.thinkingLevel);
+
+		// Reset retry counter for new model (starts fresh retry cycle)
+		this._retryAttempt = 0;
+		this._retryResolve = undefined;
+		this._retryPromise = undefined;
+
+		// Increment total attempts counter
+		this._totalFallbackAttempts++;
+
+		// Continue execution
+		setTimeout(() => {
+			this.agent.continue().catch(() => {
+				// Continue failed - will be caught by next agent_end
+			});
+		}, 0);
+
+		return true;
+	}
+
+	/**
+	 * Reset fallback state (called on successful response).
+	 */
+	private _resetFallbackState(): void {
+		this._fallbackIndex = 0;
+		this._fallbackChain = [];
+		this._totalFallbackAttempts = 0;
+	}
+
+	/** Whether model fallback is enabled */
+	get fallbackEnabled(): boolean {
+		return this.settingsManager.getFallbackEnabled();
+	}
+
+	/**
+	 * Toggle model fallback setting.
+	 */
+	setFallbackEnabled(enabled: boolean): void {
+		this.settingsManager.setFallbackEnabled(enabled);
 	}
 
 	// =========================================================================

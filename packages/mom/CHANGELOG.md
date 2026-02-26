@@ -1,7 +1,7 @@
-# Changelog
-
 ## [Unreleased]
 
+### Added
+- Added model fallback support: automatically switch to alternative models when the current model fails with retryable errors (rate limits, server errors). Configurable via `fallback` settings in `settings.json`.
 ## [0.54.2] - 2026-02-23
 
 ## [0.54.1] - 2026-02-22

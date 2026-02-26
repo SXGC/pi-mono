@@ -92,6 +92,36 @@ When a provider requests a retry delay longer than `maxDelayMs` (e.g., Google's 
 }
 ```
 
+### Fallback
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `fallback.enabled` | boolean | `false` | Enable automatic fallback to alternative models |
+| `fallback.models` | array | - | Ordered list of fallback models (optional, auto-built if omitted) |
+| `fallback.onFallbackExhausted` | string | `"error"` | Action when all models fail: `"error"` or `"ask"` |
+
+When enabled, fallback automatically switches to alternative models after auto-retry exhausts attempts on the current model. The fallback chain is built automatically (same provider models first, then other providers) unless you specify explicit models.
+
+```json
+{
+  "fallback": {
+    "enabled": true,
+    "models": [
+      { "provider": "anthropic", "modelId": "claude-sonnet-4-20250514" },
+      { "provider": "openai", "modelId": "gpt-4o" },
+      { "provider": "google", "modelId": "gemini-2.5-flash" }
+    ],
+    "onFallbackExhausted": "error"
+  }
+}
+```
+
+**Behavior:**
+- Triggers after auto-retry exhausts attempts on the current model
+- Builds fallback chain: same provider models first, then other providers
+- Emits `fallback_start`/`fallback_end` events for UI integration
+- Resets on successful response (not error/aborted)
+
 ### Message Delivery
 
 | Setting | Type | Default | Description |
@@ -193,6 +223,13 @@ See [packages.md](packages.md) for package management details.
   "retry": {
     "enabled": true,
     "maxRetries": 3
+  },
+  "fallback": {
+    "enabled": true,
+    "models": [
+      { "provider": "openai", "modelId": "gpt-4o" },
+      { "provider": "google", "modelId": "gemini-2.5-flash" }
+    ]
   },
   "enabledModels": ["claude-*", "gpt-4o"],
   "packages": ["pi-skills"]

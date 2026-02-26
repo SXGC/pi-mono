@@ -1,5 +1,3 @@
-# Changelog
-
 ## [Unreleased]
 
 ### Added
@@ -7,6 +5,7 @@
 
 - Added OpenTelemetry/Langfuse telemetry support for session, turn, tool, and LLM call tracing via `langfuse` settings
 
+- Added model fallback feature: automatically switch to alternative models when the current model fails with retryable errors (rate limits, server errors). Configurable via `fallback` settings with `enabled`, `models`, and `onFallbackExhausted` options. Emits `fallback_start` and `fallback_end` events for UI integration.
 ## [0.54.2] - 2026-02-23
 
 ### Fixed
