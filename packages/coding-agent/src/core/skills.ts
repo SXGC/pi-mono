@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "f
 import ignore from "ignore";
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
+import { fileURLToPath } from "url";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.js";
 import { parseFrontmatter } from "../utils/frontmatter.js";
 import type { ResourceDiagnostic } from "./diagnostics.js";
@@ -13,6 +14,17 @@ const MAX_NAME_LENGTH = 64;
 const MAX_DESCRIPTION_LENGTH = 1024;
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
+
+/**
+ * Get the path to the builtin skills directory.
+ * Resolves relative to the compiled dist directory.
+ */
+export function getBuiltinSkillsDir(): string {
+	const currentDir = dirname(fileURLToPath(import.meta.url));
+	// currentDir is .../packages/coding-agent/dist/core
+	// builtin/skills is at .../packages/coding-agent/builtin/skills
+	return resolve(currentDir, "../../builtin/skills");
+}
 
 type IgnoreMatcher = ReturnType<typeof ignore>;
 
@@ -75,6 +87,7 @@ export interface Skill {
 	description: string;
 	filePath: string;
 	baseDir: string;
+	/** Source of the skill: "builtin", "user", "project", or "path" */
 	source: string;
 	disableModelInvocation: boolean;
 }
@@ -333,6 +346,8 @@ export interface LoadSkillsOptions {
 	skillPaths?: string[];
 	/** Include default skills directories. Default: true */
 	includeDefaults?: boolean;
+	/** Include builtin skills directory. Default: true */
+	includeBuiltin?: boolean;
 }
 
 function normalizePath(input: string): string {
@@ -353,7 +368,7 @@ function resolveSkillPath(p: string, cwd: string): string {
  * Returns skills and any validation diagnostics.
  */
 export function loadSkills(options: LoadSkillsOptions = {}): LoadSkillsResult {
-	const { cwd = process.cwd(), agentDir, skillPaths = [], includeDefaults = true } = options;
+	const { cwd = process.cwd(), agentDir, skillPaths = [], includeDefaults = true, includeBuiltin = true } = options;
 
 	// Resolve agentDir - if not provided, use default from config
 	const resolvedAgentDir = agentDir ?? getAgentDir();
@@ -397,6 +412,12 @@ export function loadSkills(options: LoadSkillsOptions = {}): LoadSkillsResult {
 				realPathSet.add(realPath);
 			}
 		}
+	}
+
+	// Load builtin skills first (lowest priority)
+	if (includeBuiltin) {
+		const builtinSkillsDir = getBuiltinSkillsDir();
+		addSkills(loadSkillsFromDirInternal(builtinSkillsDir, "builtin", true));
 	}
 
 	if (includeDefaults) {

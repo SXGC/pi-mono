@@ -2,10 +2,18 @@ import { homedir } from "os";
 import { join, resolve } from "path";
 import { describe, expect, it } from "vitest";
 import type { ResourceDiagnostic } from "../src/core/diagnostics.js";
-import { formatSkillsForPrompt, loadSkills, loadSkillsFromDir, type Skill } from "../src/core/skills.js";
+import {
+	formatSkillsForPrompt,
+	getBuiltinSkillsDir,
+	loadSkills,
+	loadSkillsFromDir,
+	type Skill,
+} from "../src/core/skills.js";
 
 const fixturesDir = resolve(__dirname, "fixtures/skills");
 const collisionFixturesDir = resolve(__dirname, "fixtures/skills-collision");
+const emptyAgentDir = resolve(__dirname, "fixtures/empty-agent");
+const emptyCwd = resolve(__dirname, "fixtures/empty-cwd");
 
 describe("skills", () => {
 	describe("loadSkillsFromDir", () => {
@@ -329,14 +337,12 @@ describe("skills", () => {
 	});
 
 	describe("loadSkills with options", () => {
-		const emptyAgentDir = resolve(__dirname, "fixtures/empty-agent");
-		const emptyCwd = resolve(__dirname, "fixtures/empty-cwd");
-
 		it("should load from explicit skillPaths", () => {
 			const { skills, diagnostics } = loadSkills({
 				agentDir: emptyAgentDir,
 				cwd: emptyCwd,
 				skillPaths: [join(fixturesDir, "valid-skill")],
+				includeBuiltin: false,
 			});
 			expect(skills).toHaveLength(1);
 			expect(skills[0].source).toBe("path");
@@ -348,6 +354,7 @@ describe("skills", () => {
 				agentDir: emptyAgentDir,
 				cwd: emptyCwd,
 				skillPaths: ["/non/existent/path"],
+				includeBuiltin: false,
 			});
 			expect(skills).toHaveLength(0);
 			expect(diagnostics.some((d: ResourceDiagnostic) => d.message.includes("does not exist"))).toBe(true);
@@ -359,11 +366,13 @@ describe("skills", () => {
 				agentDir: emptyAgentDir,
 				cwd: emptyCwd,
 				skillPaths: ["~/.pi/agent/skills"],
+				includeBuiltin: false,
 			});
 			const { skills: withoutTilde } = loadSkills({
 				agentDir: emptyAgentDir,
 				cwd: emptyCwd,
 				skillPaths: [homeSkillsDir],
+				includeBuiltin: false,
 			});
 			expect(withTilde.length).toBe(withoutTilde.length);
 		});
@@ -406,6 +415,53 @@ describe("skills", () => {
 			expect(skillMap.get("calendar")?.source).toBe("first");
 			expect(collisionWarnings).toHaveLength(1);
 			expect(collisionWarnings[0].message).toContain("name collision");
+		});
+	});
+
+	describe("builtin skills", () => {
+		it("should return correct builtin skills directory path", () => {
+			const builtinDir = getBuiltinSkillsDir();
+			expect(builtinDir).toContain("builtin/skills");
+		});
+
+		it("should load builtin skills with source 'builtin'", () => {
+			const { skills } = loadSkills({
+				agentDir: emptyAgentDir,
+				cwd: emptyCwd,
+				includeDefaults: false,
+				includeBuiltin: true,
+			});
+
+			const builtinSkill = skills.find((s) => s.name === "test-builtin-skill");
+			expect(builtinSkill).toBeDefined();
+			expect(builtinSkill?.source).toBe("builtin");
+		});
+
+		it("should skip builtin skills when includeBuiltin is false", () => {
+			const { skills } = loadSkills({
+				agentDir: emptyAgentDir,
+				cwd: emptyCwd,
+				includeDefaults: false,
+				includeBuiltin: false,
+			});
+
+			const builtinSkill = skills.find((s) => s.name === "test-builtin-skill");
+			expect(builtinSkill).toBeUndefined();
+		});
+
+		it("should load builtin skills before user skills (builtin has lower priority)", () => {
+			// Create a user skill with the same name to test priority
+			const { skills } = loadSkills({
+				agentDir: fixturesDir, // Contains valid-skill, but not test-builtin-skill
+				cwd: emptyCwd,
+				includeDefaults: true,
+				includeBuiltin: true,
+			});
+
+			// Builtin skill should be loaded
+			const builtinSkill = skills.find((s) => s.name === "test-builtin-skill");
+			expect(builtinSkill).toBeDefined();
+			expect(builtinSkill?.source).toBe("builtin");
 		});
 	});
 });
