@@ -1,4 +1,4 @@
-import type { SlackBlock } from "./slack.js";
+import type { MarkdownBlock, RichTextContent, SlackBlock, TaskCardBlock } from "./slack.js";
 
 export interface SlackBlockPayload {
 	blocks: SlackBlock[];
@@ -8,68 +8,66 @@ export interface SlackBlockPayload {
 type MarkdownKind = "thinking" | "text";
 type TaskStatus = "in_progress" | "complete" | "error";
 
-const MRKDWN_MAX = 2800;
-const CODE_BLOCK_MAX = 1800;
-
-function escapeMrkdwn(text: string): string {
-	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+const MARKDOWN_MAX = 10000; // Per block, total 12000 for all markdown blocks
+const CODE_MAX = 8000;
 
 function truncate(text: string, max: number): string {
 	if (text.length <= max) return text;
 	return `${text.slice(0, max - 3)}...`;
 }
 
-function asCodeBlock(text: string, maxLen: number): string {
-	const normalized = truncate(text.trim(), maxLen);
-	return `\`\`\`\n${normalized}\n\`\`\``;
+// Helper to create a rich_text block with preformatted (code block) content
+function richTextPreformatted(text: string): RichTextContent {
+	return {
+		type: "rich_text",
+		elements: [
+			{
+				type: "rich_text_preformatted",
+				elements: [{ type: "text", text }],
+			},
+		],
+	};
+}
+
+// Generate a unique task ID
+function generateTaskId(): string {
+	return `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function buildMarkdownPayload(text: string, kind: MarkdownKind): SlackBlockPayload {
 	const trimmed = text.trim();
-	const content = truncate(trimmed || "(empty)", MRKDWN_MAX);
+	const content = truncate(trimmed || "(empty)", MARKDOWN_MAX);
 	const label = kind === "thinking" ? "Thinking" : "Response";
-	const body = kind === "thinking" ? `_${escapeMrkdwn(content)}_` : escapeMrkdwn(content);
+	const body = kind === "thinking" ? `*${label}*\n\n_${content}_` : `${content}`;
+
+	const block: MarkdownBlock = {
+		type: "markdown",
+		text: body,
+	};
 
 	return {
-		blocks: [
-			{
-				type: "context",
-				elements: [{ type: "mrkdwn", text: `*${label}*` }],
-			},
-			{
-				type: "section",
-				text: { type: "mrkdwn", text: body },
-			},
-		],
+		blocks: [block],
 		fallbackText: `${label}: ${content}`,
 	};
 }
 
 export function buildTaskCardStartPayload(toolName: string, label: string, argsText: string): SlackBlockPayload {
-	const safeTool = escapeMrkdwn(toolName);
-	const safeLabel = escapeMrkdwn(label);
+	const title = label ? `${toolName} — ${label}` : toolName;
 	const args = argsText.trim();
-	const blocks: SlackBlock[] = [
-		{
-			type: "section",
-			text: { type: "mrkdwn", text: `:hourglass_flowing_sand: *${safeTool}* ${safeLabel ? `— ${safeLabel}` : ""}` },
-		},
-		{
-			type: "context",
-			elements: [{ type: "mrkdwn", text: "Status: `in_progress`" }],
-		},
-	];
+
+	const block: TaskCardBlock = {
+		type: "task_card",
+		task_id: generateTaskId(),
+		title,
+		status: "in_progress",
+	};
 
 	if (args) {
-		blocks.push({
-			type: "section",
-			text: { type: "mrkdwn", text: `*Args*\n${asCodeBlock(args, CODE_BLOCK_MAX)}` },
-		});
+		block.details = richTextPreformatted(truncate(args, CODE_MAX));
 	}
 
 	return {
-		blocks,
+		blocks: [block],
 		fallbackText: `${toolName} [in_progress]${label ? ` ${label}` : ""}`,
 	};
 }
@@ -82,43 +80,28 @@ export function buildTaskCardResultPayload(
 	resultText: string,
 	durationMs: number,
 ): SlackBlockPayload {
-	const safeTool = escapeMrkdwn(toolName);
-	const safeLabel = escapeMrkdwn(label);
-	const args = argsText.trim();
 	const durationSeconds = (durationMs / 1000).toFixed(1);
+	const title = label ? `${toolName} — ${label} (${durationSeconds}s)` : `${toolName} (${durationSeconds}s)`;
+	const args = argsText.trim();
 	const result = resultText.trim();
-	const icon = status === "error" ? ":x:" : ":white_check_mark:";
 
-	const blocks: SlackBlock[] = [
-		{
-			type: "section",
-			text: {
-				type: "mrkdwn",
-				text: `${icon} *${safeTool}* ${safeLabel ? `— ${safeLabel}` : ""} (${durationSeconds}s)`,
-			},
-		},
-		{
-			type: "context",
-			elements: [{ type: "mrkdwn", text: `Status: \`${status}\`` }],
-		},
-	];
+	const block: TaskCardBlock = {
+		type: "task_card",
+		task_id: generateTaskId(),
+		title,
+		status,
+	};
 
 	if (args) {
-		blocks.push({
-			type: "section",
-			text: { type: "mrkdwn", text: `*Args*\n${asCodeBlock(args, CODE_BLOCK_MAX)}` },
-		});
+		block.details = richTextPreformatted(truncate(args, CODE_MAX));
 	}
 
 	if (result) {
-		blocks.push({
-			type: "section",
-			text: { type: "mrkdwn", text: `*Result*\n${asCodeBlock(result, CODE_BLOCK_MAX)}` },
-		});
+		block.output = richTextPreformatted(truncate(result, CODE_MAX));
 	}
 
 	return {
-		blocks,
+		blocks: [block],
 		fallbackText: `${toolName} [${status}] ${truncate(result || "(no result)", 300)}`,
 	};
 }

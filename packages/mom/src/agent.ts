@@ -996,7 +996,8 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 							finalText.length > SLACK_MAX_LENGTH
 								? `${finalText.substring(0, SLACK_MAX_LENGTH - 50)}\n\n_(see thread for full response)_`
 								: finalText;
-						await ctx.replaceMessage(mainText);
+						const payload = buildMarkdownPayload(mainText, "text");
+						await ctx.replaceMessageBlocks(payload.blocks, payload.fallbackText);
 					} catch (err) {
 						const errMsg = err instanceof Error ? err.message : String(err);
 						agentLog.warning("Failed to replace message with final text", errMsg);

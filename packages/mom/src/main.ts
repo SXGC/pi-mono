@@ -177,6 +177,20 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 	let isWorking = true;
 	const workingIndicator = " ...";
 	let updatePromise = Promise.resolve();
+	let mainMessageMode: "markdown" | "custom-blocks" = "markdown";
+	let mainMessageBlocks: SlackBlock[] = [];
+	let mainFallbackText = "";
+
+	const toMarkdownPayload = (text: string): { blocks: SlackBlock[]; fallbackText: string } => {
+		const fallbackText = text.trim() ? text : "(empty)";
+		const blocks: SlackBlock[] = [{ type: "markdown", text: fallbackText }];
+		return { blocks, fallbackText };
+	};
+
+	const getMainMessagePayload = (): { blocks: SlackBlock[]; fallbackText: string } => {
+		const displayText = isWorking ? accumulatedText + workingIndicator : accumulatedText;
+		return toMarkdownPayload(displayText);
+	};
 
 	const user = slack.getUser(event.user);
 
@@ -201,12 +215,15 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		respond: async (text: string, shouldLog = true) => {
 			updatePromise = updatePromise.then(async () => {
 				accumulatedText = accumulatedText ? `${accumulatedText}\n${text}` : text;
-				const displayText = isWorking ? accumulatedText + workingIndicator : accumulatedText;
+				const payload = getMainMessagePayload();
+				mainMessageMode = "markdown";
+				mainMessageBlocks = payload.blocks;
+				mainFallbackText = payload.fallbackText;
 
 				if (messageTs) {
-					await slack.updateMessage(event.channel, messageTs, displayText);
+					await slack.updateMessageBlocks(event.channel, messageTs, payload.fallbackText, payload.blocks);
 				} else {
-					messageTs = await slack.postMessage(event.channel, displayText);
+					messageTs = await slack.postMessageBlocks(event.channel, payload.fallbackText, payload.blocks);
 				}
 
 				if (shouldLog && messageTs) {
@@ -219,20 +236,43 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		replaceMessage: async (text: string) => {
 			updatePromise = updatePromise.then(async () => {
 				accumulatedText = text;
-				const displayText = isWorking ? accumulatedText + workingIndicator : accumulatedText;
+				const payload = getMainMessagePayload();
+				mainMessageMode = "markdown";
+				mainMessageBlocks = payload.blocks;
+				mainFallbackText = payload.fallbackText;
 				if (messageTs) {
-					await slack.updateMessage(event.channel, messageTs, displayText);
+					await slack.updateMessageBlocks(event.channel, messageTs, payload.fallbackText, payload.blocks);
 				} else {
-					messageTs = await slack.postMessage(event.channel, displayText);
+					messageTs = await slack.postMessageBlocks(event.channel, payload.fallbackText, payload.blocks);
 				}
 			});
 			await updatePromise;
 		},
 
+		replaceMessageBlocks: async (blocks: SlackBlock[], fallbackText: string) => {
+			updatePromise = updatePromise.then(async () => {
+				accumulatedText = fallbackText;
+				mainMessageMode = "custom-blocks";
+				mainMessageBlocks = blocks;
+				mainFallbackText = fallbackText;
+				if (messageTs) {
+					await slack.updateMessageBlocks(event.channel, messageTs, fallbackText, blocks);
+				} else {
+					messageTs = await slack.postMessageBlocks(event.channel, fallbackText, blocks);
+				}
+			});
+			await updatePromise;
+		},
 		respondInThread: async (text: string) => {
 			updatePromise = updatePromise.then(async () => {
 				if (messageTs) {
-					const ts = await slack.postInThread(event.channel, messageTs, text);
+					const payload = toMarkdownPayload(text);
+					const ts = await slack.postInThreadBlocks(
+						event.channel,
+						messageTs,
+						payload.fallbackText,
+						payload.blocks,
+					);
 					threadMessageTs.push(ts);
 				}
 			});
@@ -264,7 +304,11 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 				updatePromise = updatePromise.then(async () => {
 					if (!messageTs) {
 						accumulatedText = eventFilename ? `_Starting event: ${eventFilename}_` : "_Thinking_";
-						messageTs = await slack.postMessage(event.channel, accumulatedText + workingIndicator);
+						const payload = getMainMessagePayload();
+						mainMessageMode = "markdown";
+						mainMessageBlocks = payload.blocks;
+						mainFallbackText = payload.fallbackText;
+						messageTs = await slack.postMessageBlocks(event.channel, payload.fallbackText, payload.blocks);
 					}
 				});
 				await updatePromise;
@@ -279,8 +323,14 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 			updatePromise = updatePromise.then(async () => {
 				isWorking = working;
 				if (messageTs) {
-					const displayText = isWorking ? accumulatedText + workingIndicator : accumulatedText;
-					await slack.updateMessage(event.channel, messageTs, displayText);
+					if (mainMessageMode === "markdown") {
+						const payload = getMainMessagePayload();
+						mainMessageBlocks = payload.blocks;
+						mainFallbackText = payload.fallbackText;
+						await slack.updateMessageBlocks(event.channel, messageTs, payload.fallbackText, payload.blocks);
+					} else {
+						await slack.updateMessageBlocks(event.channel, messageTs, mainFallbackText, mainMessageBlocks);
+					}
 				}
 			});
 			await updatePromise;

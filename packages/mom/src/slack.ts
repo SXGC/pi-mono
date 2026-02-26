@@ -14,6 +14,49 @@ const slackLog = log.createLogger("slack");
 // Types
 // ============================================================================
 
+// New Slack Block Kit types not yet in @slack/types
+export interface MarkdownBlock {
+	type: "markdown";
+	text: string;
+	block_id?: string;
+}
+
+export interface RichTextElement {
+	type: "text";
+	text: string;
+	style?: { bold?: boolean; italic?: boolean; strike?: boolean; code?: boolean };
+}
+
+export interface RichTextSection {
+	type: "rich_text_section";
+	elements: RichTextElement[];
+}
+
+export interface RichTextPreformatted {
+	type: "rich_text_preformatted";
+	elements: RichTextElement[];
+	border?: number;
+}
+
+export interface RichTextContent {
+	type: "rich_text";
+	elements: (RichTextSection | RichTextPreformatted)[];
+	block_id?: string;
+}
+
+export interface TaskCardBlock {
+	type: "task_card";
+	task_id: string;
+	title: string;
+	status: "pending" | "in_progress" | "complete" | "error";
+	details?: RichTextContent;
+	output?: RichTextContent;
+	sources?: Array<{ type: "url"; url: string; text: string }>;
+	block_id?: string;
+}
+
+export type SlackBlock = KnownBlock | MarkdownBlock | TaskCardBlock;
+
 export interface SlackEvent {
 	type: "mention" | "dm";
 	channel: string;
@@ -63,6 +106,7 @@ export interface SlackContext {
 	users: UserInfo[];
 	respond: (text: string, shouldLog?: boolean) => Promise<void>;
 	replaceMessage: (text: string) => Promise<void>;
+	replaceMessageBlocks: (blocks: SlackBlock[], fallbackText: string) => Promise<void>;
 	respondInThread: (text: string) => Promise<void>;
 	respondBlocksInThread: (blocks: SlackBlock[], fallbackText: string) => Promise<string | undefined>;
 	updateThreadBlocks: (threadMessageTs: string, blocks: SlackBlock[], fallbackText: string) => Promise<void>;
@@ -71,8 +115,6 @@ export interface SlackContext {
 	setWorking: (working: boolean) => Promise<void>;
 	deleteMessage: () => Promise<void>;
 }
-
-export type SlackBlock = KnownBlock;
 
 export interface MomHandler {
 	/**
