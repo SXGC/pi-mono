@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Added `builtin/` directory with built-in skills shipped with pi
 
 - Added OpenTelemetry/Langfuse telemetry support for session, turn, tool, and LLM call tracing via `langfuse` settings
 

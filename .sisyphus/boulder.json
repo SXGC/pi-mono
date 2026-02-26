@@ -1,9 +1,9 @@
 {
-  "active_plan": "/Users/cai/Dev/pi-mono/.sisyphus/plans/mom-slash-commands.md",
-  "started_at": "2026-02-25T09:15:54.905Z",
+  "active_plan": "/Users/cai/Dev/pi-mono/.sisyphus/plans/builtin-skills.md",
+  "started_at": "2026-02-26T07:34:05.990Z",
   "session_ids": [
-    "ses_36bea9f75ffeCjaJDwzOvhw33M"
+    "ses_367217a6bffer0aiWNqlbrTkdi"
   ],
-  "plan_name": "mom-slash-commands",
+  "plan_name": "builtin-skills",
   "agent": "atlas"
 }

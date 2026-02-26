@@ -7,6 +7,10 @@
 		{
 			"name": "mom-conf",
 			"path": "/Users/cai/.pi"
+		},
+		{
+			"name": "opencode",
+			"path": "/Users/cai/.config/opencode"
 		}
 	],
 	"settings": {}

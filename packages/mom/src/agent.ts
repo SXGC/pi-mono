@@ -778,6 +778,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		writeFileSync(contextFile, "");
 		writeFileSync(logFile, "");
 
+		sessionManager.setSessionFile(contextFile);
 		agent.replaceMessages([]);
 
 		agentLog.info(`[${channelId}] Session reset, archived to ${timestamp}`);
