@@ -263,6 +263,7 @@ export function logUsageSummary(
 	},
 	contextTokens?: number,
 	contextWindow?: number,
+	model?: { provider: string; id: string },
 ): string {
 	const formatTokens = (count: number): string => {
 		if (count < 1000) return count.toString();
@@ -273,6 +274,9 @@ export function logUsageSummary(
 
 	const lines: string[] = [];
 	lines.push("*Usage Summary*");
+	if (model) {
+		lines.push(`Model: ${model.provider}/${model.id}`);
+	}
 	lines.push(`Tokens: ${usage.input.toLocaleString()} in, ${usage.output.toLocaleString()} out`);
 	if (usage.cacheRead > 0 || usage.cacheWrite > 0) {
 		lines.push(`Cache: ${usage.cacheRead.toLocaleString()} read, ${usage.cacheWrite.toLocaleString()} write`);
