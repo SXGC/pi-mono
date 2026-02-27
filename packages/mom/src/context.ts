@@ -183,6 +183,15 @@ export interface MomFallbackSettings {
 	onFallbackExhausted?: "error" | "ask";
 }
 
+export interface MomResponseSettings {
+	/** Respond to @mentions in channels */
+	mention: boolean;
+	/** Respond to direct messages */
+	dm: boolean;
+	/** Respond to regular channel messages (not @mentions) */
+	channel: boolean;
+}
+
 export interface MomSettings {
 	defaultProvider?: string;
 	defaultModel?: string;
@@ -193,8 +202,10 @@ export interface MomSettings {
 	branchSummary?: Partial<MomBranchSummarySettings>;
 	langfuse?: MomLangfuseSettings;
 	fallback?: MomFallbackSettings;
+	response?: Partial<MomResponseSettings>;
 	shellCommandPrefix?: string;
 	theme?: string;
+	obsidianPath?: string;
 }
 
 const DEFAULT_COMPACTION: MomCompactionSettings = {
@@ -215,6 +226,12 @@ const DEFAULT_IMAGES: MomImageSettings = {
 
 const DEFAULT_BRANCH_SUMMARY: MomBranchSummarySettings = {
 	reserveTokens: 16384,
+};
+
+const DEFAULT_RESPONSE: MomResponseSettings = {
+	mention: true,
+	dm: true,
+	channel: false,
 };
 
 /**
@@ -287,6 +304,12 @@ export class MomSettingsManager {
 		this.save();
 	}
 
+	getResponseSettings(): MomResponseSettings {
+		return {
+			...DEFAULT_RESPONSE,
+			...this.settings.response,
+		};
+	}
 	getDefaultModel(): string | undefined {
 		return this.settings.defaultModel;
 	}
@@ -339,6 +362,14 @@ export class MomSettingsManager {
 		return this.settings.theme;
 	}
 
+	getObsidianPath(): string | undefined {
+		return this.settings.obsidianPath;
+	}
+
+	setObsidianPath(path: string | undefined): void {
+		this.settings.obsidianPath = path;
+		this.save();
+	}
 	getLangfuseSettings(): MomLangfuseSettings {
 		return this.settings.langfuse ?? { enabled: false };
 	}

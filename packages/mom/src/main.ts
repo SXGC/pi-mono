@@ -433,8 +433,8 @@ const bot = new SlackBotClass(handler, {
 	botToken: MOM_SLACK_BOT_TOKEN,
 	workingDir,
 	store: sharedStore,
+	settingsManager,
 });
-
 // Start events watcher
 const eventsWatcher = createEventsWatcher(workingDir, bot);
 eventsWatcher.start();

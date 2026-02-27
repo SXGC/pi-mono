@@ -15,11 +15,11 @@ A Slack bot powered by an LLM that can execute bash commands, read/write files, 
 
 ## Documentation
 
+- [Settings Configuration](docs/settings.md) - Configure response behavior, models, compaction, etc.
 - [Artifacts Server](docs/artifacts-server.md) - Share HTML/JS visualizations publicly with live reload
 - [Events System](docs/events.md) - Schedule reminders and periodic tasks
 - [Sandbox Guide](docs/sandbox.md) - Docker vs host mode security
 - [Slack Bot Setup](docs/slack-bot-minimal-guide.md) - Minimal Slack integration guide
-
 ## Installation
 
 ```bash

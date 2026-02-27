@@ -158,6 +158,7 @@ function buildSystemPrompt(
 	channels: ChannelInfo[],
 	users: UserInfo[],
 	skills: Skill[],
+	obsidianPath?: string,
 ): string {
 	const channelPath = `${workspacePath}/${channelId}`;
 	const isDocker = sandboxConfig.type === "docker";
@@ -273,6 +274,7 @@ cat > ${workspacePath}/events/dentist-reminder-$(date +%s).json << 'EOF'
 EOF
 \`\`\`
 Or check if file exists first before creating.
+After each new event is added, ask the user whether they want to run a test once right away.
 
 ### Managing Events
 - List: \`ls ${workspacePath}/events/\`
@@ -303,7 +305,19 @@ Update when you learn something important or when asked to remember something.
 
 ### Current Memory
 ${memory}
-
+${
+	obsidianPath
+		? `
+## Obsidian Vault
+The user has an Obsidian vault at: ${obsidianPath}
+- You can read, write, and edit notes in this vault
+- Use markdown format for notes
+- Create new notes in the vault when asked
+- Search existing notes using grep or find
+- The vault may contain subdirectories for organization
+`
+		: ``
+}
 ## System Configuration Log
 Maintain ${workspacePath}/SYSTEM.md to log all environment modifications:
 - Installed packages (apk add, npm install, pip install)
@@ -427,18 +441,31 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 	// Create tools
 	const tools = createMomTools(executor);
 
+	// Create settings manager (needed for obsidianPath in system prompt)
+	const settingsManager = new MomSettingsManager(join(channelDir, ".."));
+
 	// Initial system prompt (will be updated each run with fresh memory/channels/users/skills)
 	const memory = getMemory(channelDir);
 	const initialSkillLoadResult = loadMomSkills(channelDir, workspacePath, sandboxConfig);
 	let currentSkills = initialSkillLoadResult.skills;
 	let currentSkillDiagnostics = initialSkillLoadResult.diagnostics;
-	let currentSystemPrompt = buildSystemPrompt(workspacePath, channelId, memory, sandboxConfig, [], [], currentSkills);
+	let currentSystemPrompt = buildSystemPrompt(
+		workspacePath,
+		channelId,
+		memory,
+		sandboxConfig,
+		[],
+		[],
+		currentSkills,
+		settingsManager.getObsidianPath(),
+	);
 
-	// Create session manager and settings manager
+	// Create session manager
 	// Use a fixed context.jsonl file per channel (not timestamped like coding-agent)
 	const contextFile = join(channelDir, "context.jsonl");
 	const sessionManager = SessionManager.open(contextFile, channelDir);
-	const settingsManager = new MomSettingsManager(join(channelDir, ".."));
+
+	// Create AuthStorage and ModelRegistry
 
 	// Create AuthStorage and ModelRegistry
 	// Auth stored outside workspace so agent can't access it
@@ -831,6 +858,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			}
 
 			// Update system prompt with fresh memory, channel/user info, and skills
+			settingsManager.reload();
 			const memory = getMemory(channelDir);
 			const skillLoadResult = loadMomSkills(channelDir, workspacePath, sandboxConfig);
 			const skills = skillLoadResult.skills;
@@ -844,6 +872,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				ctx.channels,
 				ctx.users,
 				skills,
+				settingsManager.getObsidianPath(),
 			);
 			currentSystemPrompt = systemPrompt;
 			session.agent.setSystemPrompt(systemPrompt);

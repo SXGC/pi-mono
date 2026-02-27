@@ -5,6 +5,7 @@ import { WebClient } from "@slack/web-api";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { basename, join } from "path";
 import type { AgentRunner } from "./agent.js";
+import type { MomSettingsManager } from "./context.js";
 import * as log from "./log.js";
 import type { Attachment, ChannelStore } from "./store.js";
 
@@ -181,6 +182,7 @@ export class SlackBot {
 	private handler: MomHandler;
 	private workingDir: string;
 	private store: ChannelStore;
+	private settingsManager: MomSettingsManager;
 	private botUserId: string | null = null;
 	private startupTs: string | null = null; // Messages older than this are just logged, not processed
 
@@ -190,11 +192,18 @@ export class SlackBot {
 
 	constructor(
 		handler: MomHandler,
-		config: { appToken: string; botToken: string; workingDir: string; store: ChannelStore },
+		config: {
+			appToken: string;
+			botToken: string;
+			workingDir: string;
+			store: ChannelStore;
+			settingsManager: MomSettingsManager;
+		},
 	) {
 		this.handler = handler;
 		this.workingDir = config.workingDir;
 		this.store = config.store;
+		this.settingsManager = config.settingsManager;
 		this.socketClient = new SocketModeClient({ appToken: config.appToken });
 		this.webClient = new WebClient(config.botToken);
 	}
@@ -358,6 +367,12 @@ export class SlackBot {
 				return;
 			}
 
+			// Check if mentions are enabled
+			const responseSettings = this.settingsManager.getResponseSettings();
+			if (!responseSettings.mention) {
+				ack();
+				return;
+			}
 			const slackEvent: SlackEvent = {
 				type: "mention",
 				channel: e.channel,
@@ -458,6 +473,17 @@ export class SlackBot {
 				return;
 			}
 
+			// Check response settings based on message type
+			const responseSettings = this.settingsManager.getResponseSettings();
+			if (isDM && !responseSettings.dm) {
+				ack();
+				return;
+			}
+			if (!isDM && !responseSettings.channel) {
+				ack();
+				return;
+			}
+
 			const slackEvent: SlackEvent = {
 				type: isDM ? "dm" : "mention",
 				channel: e.channel,
@@ -478,45 +504,44 @@ export class SlackBot {
 				return;
 			}
 
-			// Only trigger handler for DMs
-			if (isDM) {
-				// Check for stop command - execute immediately, don't queue!
-				if (slackEvent.text.toLowerCase().trim() === "stop") {
-					if (this.handler.isRunning(e.channel)) {
-						this.handler.handleStop(e.channel, this); // Don't await, don't queue
-					} else {
-						this.postMessage(e.channel, "_Nothing running_");
-					}
-					ack();
-					return;
-				}
-
-				const parsed = parseSlashCommand(slackEvent.text);
-				if (parsed && isBuiltinCommand(parsed.name)) {
-					this.getQueue(e.channel).enqueue(async () => {
-						const runner = this.handler.getRunner(e.channel);
-						if (!runner) {
-							await this.postMessage(e.channel, "_No runner available_");
-							return;
-						}
-
-						const result = await runner.executeBuiltinCommand(parsed.name, parsed.args);
-						if (result.message) {
-							await this.postMessage(e.channel, result.success ? result.message : `_${result.message}_`);
-						}
-						if (result.error) {
-							await this.postMessage(e.channel, `_Error: ${result.error}_`);
-						}
-					});
-					ack();
-					return;
-				}
-
+			// Trigger handler for DMs and channel messages (not @mentions which are handled by app_mention)
+			// Check for stop command - execute immediately, don't queue!
+			if (slackEvent.text.toLowerCase().trim() === "stop") {
 				if (this.handler.isRunning(e.channel)) {
-					this.postMessage(e.channel, "_Already working. Say `stop` to cancel._");
+					this.handler.handleStop(e.channel, this); // Don't await, don't queue
 				} else {
-					this.getQueue(e.channel).enqueue(() => this.handler.handleEvent(slackEvent, this));
+					this.postMessage(e.channel, "_Nothing running_");
 				}
+				ack();
+				return;
+			}
+
+			const parsed = parseSlashCommand(slackEvent.text);
+			if (parsed && isBuiltinCommand(parsed.name)) {
+				this.getQueue(e.channel).enqueue(async () => {
+					const runner = this.handler.getRunner(e.channel);
+					if (!runner) {
+						await this.postMessage(e.channel, "_No runner available_");
+						return;
+					}
+
+					const result = await runner.executeBuiltinCommand(parsed.name, parsed.args);
+					if (result.message) {
+						await this.postMessage(e.channel, result.success ? result.message : `_${result.message}_`);
+					}
+					if (result.error) {
+						await this.postMessage(e.channel, `_Error: ${result.error}_`);
+					}
+				});
+				ack();
+				return;
+			}
+
+			if (this.handler.isRunning(e.channel)) {
+				const cancelHint = isDM ? "Say `stop` to cancel." : "Say `@mom stop` to cancel.";
+				this.postMessage(e.channel, `_Already working. ${cancelHint}_`);
+			} else {
+				this.getQueue(e.channel).enqueue(() => this.handler.handleEvent(slackEvent, this));
 			}
 
 			ack();
