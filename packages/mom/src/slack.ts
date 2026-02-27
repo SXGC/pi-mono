@@ -349,6 +349,35 @@ export class SlackBot {
 		return true;
 	}
 
+	/**
+	 * Enqueue a user message for processing. Sends waiting prompt when queued.
+	 * Returns void, but sends queue full error if queue is full (max 5).
+	 */
+	async enqueueUserMessage(slackEvent: SlackEvent): Promise<void> {
+		const queue = this.getQueue(slackEvent.channel);
+
+		// Check queue full (5 items already in queue)
+		if (queue.size() >= 5) {
+			await this.postInThread(slackEvent.channel, slackEvent.ts, "_Queue full. Please wait and try again._");
+			return;
+		}
+
+		// Check if currently running
+		if (this.handler.isRunning(slackEvent.channel)) {
+			// Send waiting prompt to user's message thread
+			await this.postInThread(
+				slackEvent.channel,
+				slackEvent.ts,
+				"_Queued. Will respond when current task finishes._",
+			);
+			// Enqueue for later processing
+			queue.enqueue(() => this.handler.handleEvent(slackEvent, this));
+		} else {
+			// Not running, process immediately
+			queue.enqueue(() => this.handler.handleEvent(slackEvent, this));
+		}
+	}
+
 	// ==========================================================================
 	// Private - Event Handlers
 	// ==========================================================================
@@ -498,17 +527,13 @@ export class SlackBot {
 				return;
 			}
 
-			// SYNC: Check if busy
-			if (this.handler.isRunning(e.channel)) {
-				this.postMessage(e.channel, "_Already working. Say `@mom stop` to cancel._").catch((error: unknown) => {
-					slackLog.warning(
-						`[${e.channel}] Failed to post busy status`,
-						error instanceof Error ? error.message : String(error),
-					);
-				});
-			} else {
-				this.getQueue(e.channel).enqueue(() => this.handler.handleEvent(slackEvent, this));
-			}
+			// Enqueue message (handles both running and not running states)
+			this.enqueueUserMessage(slackEvent).catch((error: unknown) => {
+				slackLog.warning(
+					`[${slackEvent.channel}] Failed to enqueue user message`,
+					error instanceof Error ? error.message : String(error),
+				);
+			});
 
 			safeAck(ack, "app_mention", e.channel);
 		});
@@ -623,17 +648,13 @@ export class SlackBot {
 				return;
 			}
 
-			if (this.handler.isRunning(e.channel)) {
-				const cancelHint = isDM ? "Say `stop` to cancel." : "Say `@mom stop` to cancel.";
-				this.postMessage(e.channel, `_Already working. ${cancelHint}_`).catch((error: unknown) => {
-					slackLog.warning(
-						`[${e.channel}] Failed to post busy status`,
-						error instanceof Error ? error.message : String(error),
-					);
-				});
-			} else {
-				this.getQueue(e.channel).enqueue(() => this.handler.handleEvent(slackEvent, this));
-			}
+			// Enqueue message (handles both running and not running states)
+			this.enqueueUserMessage(slackEvent).catch((error: unknown) => {
+				slackLog.warning(
+					`[${e.channel}] Failed to enqueue message`,
+					error instanceof Error ? error.message : String(error),
+				);
+			});
 
 			safeAck(ack, "message", e.channel);
 		});
