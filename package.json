@@ -4,7 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"clean": "pnpm -r run clean",
-		"build": "pnpm -C packages/tui run build && pnpm -C packages/ai run build && pnpm -C packages/agent run build && pnpm -C packages/coding-agent run build && pnpm -C packages/mom run build && pnpm -C packages/web-ui run build && pnpm -C packages/pods run build",
+		"build": "pnpm -C packages/observer run build && pnpm -C packages/tui run build && pnpm -C packages/ai run build && pnpm -C packages/agent run build && pnpm -C packages/coding-agent run build && pnpm -C packages/mom run build && pnpm -C packages/web-ui run build && pnpm -C packages/pods run build",
 		"dev": "concurrently --names \"ai,agent,coding-agent,mom,web-ui,tui\" --prefix-colors \"cyan,yellow,red,white,green,magenta\" \"pnpm -C packages/ai run dev\" \"pnpm -C packages/agent run dev\" \"pnpm -C packages/coding-agent run dev\" \"pnpm -C packages/mom run dev\" \"pnpm -C packages/web-ui run dev\" \"pnpm -C packages/tui run dev\"",
 		"dev:tsc": "concurrently --names \"ai,web-ui\" --prefix-colors \"cyan,green\" \"pnpm -C packages/ai run dev:tsc\" \"pnpm -C packages/web-ui run dev:tsc\"",
 		"check": "biome check --write --error-on-warnings . && tsgo --noEmit && pnpm -C packages/web-ui run check",

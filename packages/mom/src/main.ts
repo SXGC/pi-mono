@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
-import * as piAi from "@mariozechner/pi-ai";
+import {
+	initTelemetry,
+	isTelemetryEnabled,
+	type LangfuseConfig,
+	langfuseConfigToTelemetryConfig,
+	shutdownTelemetry,
+} from "@mariozechner/pi-ai";
 import { join, resolve } from "path";
 import { type AgentRunner, getOrCreateRunner } from "./agent.js";
 import { MomSettingsManager } from "./context.js";
@@ -18,22 +24,6 @@ import {
 import { ChannelStore } from "./store.js";
 
 const observerLog = log.createLogger("observer");
-
-interface TelemetryConfig {
-	enabled: boolean;
-	secretKey: string;
-	publicKey: string;
-	baseUrl?: string;
-}
-
-interface TelemetryApi {
-	initTelemetry?: (config: TelemetryConfig) => void;
-	shutdownTelemetry?: () => Promise<void>;
-}
-
-const telemetryApi = piAi as unknown as TelemetryApi;
-const initTelemetry = telemetryApi.initTelemetry ?? (() => {});
-const shutdownTelemetry = telemetryApi.shutdownTelemetry ?? (async () => {});
 
 // ============================================================================
 // Config
@@ -122,15 +112,19 @@ if (langfuseSettings.enabled) {
 		);
 		observerLog.warning("Configure langfuse.secretKey and langfuse.publicKey in workspace settings.json");
 	} else {
-		const config: TelemetryConfig = {
+		const config: LangfuseConfig = {
 			enabled: true,
 			secretKey: langfuseSettings.secretKey,
 			publicKey: langfuseSettings.publicKey,
 			baseUrl: langfuseSettings.baseUrl,
 		};
 
-		initTelemetry(config);
-		observerLog.info("Langfuse telemetry initialized successfully");
+		initTelemetry(langfuseConfigToTelemetryConfig(config));
+		if (isTelemetryEnabled()) {
+			observerLog.info("Langfuse telemetry initialized successfully");
+		} else {
+			observerLog.warning("Langfuse telemetry initialization did not enable tracing");
+		}
 	}
 } else {
 	observerLog.info("Langfuse telemetry disabled");

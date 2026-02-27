@@ -1198,15 +1198,7 @@ The library supports OpenTelemetry-based telemetry for tracking LLM calls via La
 
 ### Setup
 
-Set environment variables:
-
-```bash
-export LANGFUSE_SECRET_KEY=sk-lf-...
-export LANGFUSE_PUBLIC_KEY=pk-lf-...
-export LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional, for self-hosted
-```
-
-Or configure programmatically:
+Configure programmatically:
 
 ```typescript
 import { initTelemetry, stream, shutdownTelemetry } from '@mariozechner/pi-ai';
@@ -1239,13 +1231,5 @@ Each LLM call creates a span with:
 - `gen_ai.usage.input_tokens`: Input token count
 - `gen_ai.usage.output_tokens`: Output token count
 - `gen_ai.cost.total`: Total cost in USD
-
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `LANGFUSE_SECRET_KEY` | Langfuse secret key |
-| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
-| `LANGFUSE_BASE_URL` | Langfuse server URL (default: `https://cloud.langfuse.com`) |
 
 MIT

@@ -262,14 +262,6 @@ Track sessions, turns, tool executions, and LLM calls via Langfuse:
 }
 ```
 
-Or use environment variables:
-
-```bash
-export LANGFUSE_SECRET_KEY=sk-lf-...
-export LANGFUSE_PUBLIC_KEY=pk-lf-...
-export LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional
-```
-
 When enabled, pi traces:
 - Sessions and turns with session/turn IDs
 - Tool executions with name, call ID, and error status

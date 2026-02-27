@@ -9230,7 +9230,7 @@ export const MODELS = {
 				cacheRead: 0.049999999999999996,
 				cacheWrite: 0,
 			},
-			contextWindow: 32000,
+			contextWindow: 40960,
 			maxTokens: 8192,
 		} satisfies Model<"openai-completions">,
 		"qwen/qwen3-coder": {

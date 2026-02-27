@@ -38,6 +38,7 @@ Tools for building AI agents and managing LLM deployments.
 | **[@mariozechner/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
 | **[@mariozechner/pi-web-ui](packages/web-ui)** | Web components for AI chat interfaces |
 | **[@mariozechner/pi-pods](packages/pods)** | CLI for managing vLLM deployments on GPU pods |
+| **[@mariozechner/pi-observer](packages/observer)** | Unified structured logging (Pino) and LLM tracing (OpenTelemetry) |
 
 ## Contributing
 

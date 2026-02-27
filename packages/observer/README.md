@@ -94,11 +94,7 @@ type ExporterConfig =
 
 | Variable | Description |
 |----------|-------------|
-| `LANGFUSE_SECRET_KEY` | Langfuse secret key |
-| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
-| `LANGFUSE_BASE_URL` | Langfuse server URL (default: `https://cloud.langfuse.com`) |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | OTLP endpoint (default: `http://localhost:4318/v1/traces`) |
-| `LANGFUSE_DEBUG` / `PI_TELEMETRY_DEBUG` | Enable debug logging |
 
 ## License
 

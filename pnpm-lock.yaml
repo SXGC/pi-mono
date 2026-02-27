@@ -46,8 +46,8 @@ importers:
   packages/agent:
     dependencies:
       '@mariozechner/pi-ai':
-        specifier: ^0.54.2
-        version: 0.54.2(ws@8.19.0)(zod@3.25.76)
+        specifier: workspace:*
+        version: link:../ai
       '@mariozechner/pi-observer':
         specifier: workspace:*
         version: link:../observer

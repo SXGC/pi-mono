@@ -41,6 +41,10 @@ function attachSpanProcessorDebugHooks(spanProcessor: LangfuseSpanProcessor): La
 
 	const originalOnEnd = spanProcessor.onEnd.bind(spanProcessor);
 	spanProcessor.onEnd = (span: ProcessorOnEndSpan) => {
+		// Filter: only export llm-call spans to Langfuse
+		if (span.name !== "llm-call") {
+			return;
+		}
 		const spanContext = span.spanContext();
 		logTelemetryDebug("span queued for export", {
 			name: span.name,

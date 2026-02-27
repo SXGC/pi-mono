@@ -10,7 +10,7 @@ let defaultLogger: Logger | undefined;
 /**
  * Default log level.
  */
-const DEFAULT_LEVEL: LogLevel = "info";
+const DEFAULT_LEVEL: LogLevel = "debug";
 
 /**
  * Create a named logger instance.

@@ -146,8 +146,8 @@ Configure Langfuse telemetry for observability.
 | Option | Type | Description |
 |--------|------|-------------|
 | `enabled` | boolean | Enable Langfuse telemetry |
-| `secretKey` | string | Langfuse secret key (can also use `LANGFUSE_SECRET_KEY` env var) |
-| `publicKey` | string | Langfuse public key (can also use `LANGFUSE_PUBLIC_KEY` env var) |
+| `secretKey` | string | Langfuse secret key |
+| `publicKey` | string | Langfuse public key |
 | `baseUrl` | string | Custom Langfuse instance URL (optional) |
 
 ### Other Settings

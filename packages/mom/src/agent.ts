@@ -180,7 +180,7 @@ function buildSystemPrompt(
 - Bash working directory: ${process.cwd()}
 - Be careful with system modifications`;
 
-	return `You are mom, a Slack bot assistant. Be concise. No emojis.
+	return `You are Mom, a AI assistant. Be concise. No emojis.
 
 ## Context
 - For current date/time, use: date
