@@ -191,6 +191,7 @@ export class SlackBot {
 	private settingsManager: MomSettingsManager;
 	private botUserId: string | null = null;
 	private startupTs: string | null = null; // Messages older than this are just logged, not processed
+	private reconnectAttempts = 0;
 
 	private users = new Map<string, SlackUser>();
 	private channels = new Map<string, SlackChannel>();
@@ -210,7 +211,11 @@ export class SlackBot {
 		this.workingDir = config.workingDir;
 		this.store = config.store;
 		this.settingsManager = config.settingsManager;
-		this.socketClient = new SocketModeClient({ appToken: config.appToken });
+		this.socketClient = new SocketModeClient({
+			appToken: config.appToken,
+			clientPingTimeout: 10_000,
+			serverPingTimeout: 30_000,
+		});
 		this.webClient = new WebClient(config.botToken);
 	}
 
@@ -227,6 +232,7 @@ export class SlackBot {
 
 		await this.backfillAllChannels();
 
+		this.setupConnectionHandlers();
 		this.setupEventHandlers();
 		await this.socketClient.start();
 
@@ -356,7 +362,56 @@ export class SlackBot {
 		return queue;
 	}
 
+	private setupConnectionHandlers(): void {
+		this.socketClient.on("connecting", () => {
+			slackLog.info("Socket Mode connecting");
+		});
+
+		this.socketClient.on("reconnecting", () => {
+			this.reconnectAttempts += 1;
+			slackLog.warning(`Socket Mode reconnecting (attempt ${this.reconnectAttempts})`);
+		});
+
+		this.socketClient.on("connected", () => {
+			if (this.reconnectAttempts > 0) {
+				slackLog.info(`Socket Mode reconnected after ${this.reconnectAttempts} attempt(s)`);
+			}
+			this.reconnectAttempts = 0;
+		});
+
+		this.socketClient.on("close", () => {
+			slackLog.warning("Socket Mode connection closed");
+		});
+
+		this.socketClient.on("disconnect", (reason: unknown) => {
+			slackLog.warning("Socket Mode disconnected", reason instanceof Error ? reason.message : String(reason));
+		});
+
+		this.socketClient.on("disconnected", (reason: unknown) => {
+			slackLog.warning("Socket Mode disconnected", reason instanceof Error ? reason.message : String(reason));
+		});
+
+		this.socketClient.on("error", (error: unknown) => {
+			slackLog.warning("Socket Mode error", error instanceof Error ? error.message : String(error));
+		});
+	}
+
 	private setupEventHandlers(): void {
+		const safeAck = (
+			ack: () => Promise<unknown> | unknown,
+			eventType: "app_mention" | "message",
+			channel: string,
+		) => {
+			void Promise.resolve()
+				.then(() => ack())
+				.catch((error: unknown) => {
+					slackLog.warning(
+						`[${channel}] Failed to ack ${eventType}`,
+						error instanceof Error ? error.message : String(error),
+					);
+				});
+		};
+
 		// Channel @mentions
 		this.socketClient.on("app_mention", ({ event, ack }) => {
 			const e = event as {
@@ -369,14 +424,14 @@ export class SlackBot {
 
 			// Skip DMs (handled by message event)
 			if (e.channel.startsWith("D")) {
-				ack();
+				safeAck(ack, "app_mention", e.channel);
 				return;
 			}
 
 			// Check if mentions are enabled
 			const responseSettings = this.settingsManager.getResponseSettings();
 			if (!responseSettings.mention) {
-				ack();
+				safeAck(ack, "app_mention", e.channel);
 				return;
 			}
 			const slackEvent: SlackEvent = {
@@ -397,18 +452,28 @@ export class SlackBot {
 				slackLog.info(
 					`[${e.channel}] Logged old message (pre-startup), not triggering: ${slackEvent.text.substring(0, 30)}`,
 				);
-				ack();
+				safeAck(ack, "app_mention", e.channel);
 				return;
 			}
 
 			// Check for stop command - execute immediately, don't queue!
 			if (slackEvent.text.toLowerCase().trim() === "stop") {
 				if (this.handler.isRunning(e.channel)) {
-					this.handler.handleStop(e.channel, this); // Don't await, don't queue
+					this.handler.handleStop(e.channel, this).catch((error: unknown) => {
+						slackLog.warning(
+							`[${e.channel}] Failed to handle stop command`,
+							error instanceof Error ? error.message : String(error),
+						);
+					}); // Don't await, don't queue
 				} else {
-					this.postMessage(e.channel, "_Nothing running_");
+					this.postMessage(e.channel, "_Nothing running_").catch((error: unknown) => {
+						slackLog.warning(
+							`[${e.channel}] Failed to post stop status`,
+							error instanceof Error ? error.message : String(error),
+						);
+					});
 				}
-				ack();
+				safeAck(ack, "app_mention", e.channel);
 				return;
 			}
 
@@ -429,18 +494,23 @@ export class SlackBot {
 						await this.postMessage(e.channel, `_Error: ${result.error}_`);
 					}
 				});
-				ack();
+				safeAck(ack, "app_mention", e.channel);
 				return;
 			}
 
 			// SYNC: Check if busy
 			if (this.handler.isRunning(e.channel)) {
-				this.postMessage(e.channel, "_Already working. Say `@mom stop` to cancel._");
+				this.postMessage(e.channel, "_Already working. Say `@mom stop` to cancel._").catch((error: unknown) => {
+					slackLog.warning(
+						`[${e.channel}] Failed to post busy status`,
+						error instanceof Error ? error.message : String(error),
+					);
+				});
 			} else {
 				this.getQueue(e.channel).enqueue(() => this.handler.handleEvent(slackEvent, this));
 			}
 
-			ack();
+			safeAck(ack, "app_mention", e.channel);
 		});
 
 		// All messages (for logging) + DMs (for triggering)
@@ -458,15 +528,15 @@ export class SlackBot {
 
 			// Skip bot messages, edits, etc.
 			if (e.bot_id || !e.user || e.user === this.botUserId) {
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 			if (e.subtype !== undefined && e.subtype !== "file_share") {
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 			if (!e.text && (!e.files || e.files.length === 0)) {
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 
@@ -475,18 +545,18 @@ export class SlackBot {
 
 			// Skip channel @mentions - already handled by app_mention event
 			if (!isDM && isBotMention) {
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 
 			// Check response settings based on message type
 			const responseSettings = this.settingsManager.getResponseSettings();
 			if (isDM && !responseSettings.dm) {
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 			if (!isDM && !responseSettings.channel) {
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 
@@ -506,7 +576,7 @@ export class SlackBot {
 			// Only trigger processing for messages AFTER startup (not replayed old messages)
 			if (this.startupTs && e.ts < this.startupTs) {
 				slackLog.info(`[${e.channel}] Skipping old message (pre-startup): ${slackEvent.text.substring(0, 30)}`);
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 
@@ -514,11 +584,21 @@ export class SlackBot {
 			// Check for stop command - execute immediately, don't queue!
 			if (slackEvent.text.toLowerCase().trim() === "stop") {
 				if (this.handler.isRunning(e.channel)) {
-					this.handler.handleStop(e.channel, this); // Don't await, don't queue
+					this.handler.handleStop(e.channel, this).catch((error: unknown) => {
+						slackLog.warning(
+							`[${e.channel}] Failed to handle stop command`,
+							error instanceof Error ? error.message : String(error),
+						);
+					}); // Don't await, don't queue
 				} else {
-					this.postMessage(e.channel, "_Nothing running_");
+					this.postMessage(e.channel, "_Nothing running_").catch((error: unknown) => {
+						slackLog.warning(
+							`[${e.channel}] Failed to post stop status`,
+							error instanceof Error ? error.message : String(error),
+						);
+					});
 				}
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 
@@ -539,18 +619,23 @@ export class SlackBot {
 						await this.postMessage(e.channel, `_Error: ${result.error}_`);
 					}
 				});
-				ack();
+				safeAck(ack, "message", e.channel);
 				return;
 			}
 
 			if (this.handler.isRunning(e.channel)) {
 				const cancelHint = isDM ? "Say `stop` to cancel." : "Say `@mom stop` to cancel.";
-				this.postMessage(e.channel, `_Already working. ${cancelHint}_`);
+				this.postMessage(e.channel, `_Already working. ${cancelHint}_`).catch((error: unknown) => {
+					slackLog.warning(
+						`[${e.channel}] Failed to post busy status`,
+						error instanceof Error ? error.message : String(error),
+					);
+				});
 			} else {
 				this.getQueue(e.channel).enqueue(() => this.handler.handleEvent(slackEvent, this));
 			}
 
-			ack();
+			safeAck(ack, "message", e.channel);
 		});
 	}
 
