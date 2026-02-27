@@ -1,0 +1,63 @@
+{
+	"name": "@mariozechner/pi-observer",
+	"version": "0.54.2",
+	"description": "Unified structured logging and LLM tracing for pi packages",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./tracing": {
+			"types": "./dist/tracing/index.d.ts",
+			"import": "./dist/tracing/index.js"
+		},
+		"./logger": {
+			"types": "./dist/logger/index.d.ts",
+			"import": "./dist/logger/index.js"
+		}
+	},
+	"scripts": {
+		"clean": "rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json",
+		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
+		"test": "vitest --run",
+		"prepublishOnly": "pnpm run clean && pnpm run build"
+	},
+	"dependencies": {
+		"@langfuse/otel": "^4.6.1",
+		"@opentelemetry/api": "^1.9.0",
+		"@opentelemetry/exporter-trace-otlp-http": "^0.202.0",
+		"@opentelemetry/sdk-node": "^0.212.0",
+		"@opentelemetry/sdk-trace-base": "^2.0.1",
+		"pino": "^9.7.0",
+		"pino-pretty": "^13.0.0"
+	},
+	"keywords": [
+		"logging",
+		"tracing",
+		"opentelemetry",
+		"langfuse",
+		"pino"
+	],
+	"author": "Mario Zechner",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/badlogic/pi-mono.git",
+		"directory": "packages/observer"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"vitest": "^3.2.4"
+	}
+}

@@ -1,8 +1,8 @@
 /**
  * Langfuse OpenTelemetry tracing module.
  *
- * Provides initialization and configuration for tracing LLM calls
- * via OpenTelemetry with Langfuse as the backend.
+ * This module re-exports tracing functionality from @mariozechner/pi-observer
+ * for backward compatibility.
  *
  * @example
  * ```typescript
@@ -15,10 +15,20 @@
  * });
  *
  * // ... use LLM APIs ...
-
+ *
  * await shutdown();
  * ```
  */
 
-export { getTracer, initTelemetry, isTelemetryEnabled, safeSpanOperation, shutdownTelemetry } from "./tracer.js";
-export type { TelemetryConfig } from "./types.js";
+// Re-export types for backward compatibility
+export type { TelemetryConfig as LangfuseConfig } from "@mariozechner/pi-observer/tracing";
+// Re-export tracing functions from observer (backward compatible API)
+// Re-export the langfuseConfigToTracingConfig helper for backward compatibility
+export {
+	getTracer,
+	initTracing as initTelemetry,
+	isTelemetryEnabled,
+	langfuseConfigToTracingConfig as langfuseConfigToTelemetryConfig,
+	safeSpanOperation,
+	shutdownTelemetry,
+} from "@mariozechner/pi-observer/tracing";
