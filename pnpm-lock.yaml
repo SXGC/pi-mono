@@ -48,6 +48,9 @@ importers:
       '@mariozechner/pi-ai':
         specifier: ^0.54.2
         version: 0.54.2(ws@8.19.0)(zod@3.25.76)
+      '@mariozechner/pi-observer':
+        specifier: workspace:*
+        version: link:../observer
       '@sinclair/typebox':
         specifier: ^0.34.41
         version: 0.34.48
@@ -253,6 +256,9 @@ importers:
       '@mariozechner/pi-coding-agent':
         specifier: workspace:*
         version: link:../coding-agent
+      '@mariozechner/pi-observer':
+        specifier: 'workspace:'
+        version: link:../observer
       '@sinclair/typebox':
         specifier: ^0.34.0
         version: 0.34.48
@@ -265,9 +271,6 @@ importers:
       '@slack/web-api':
         specifier: ^7.0.0
         version: 7.14.1
-      chalk:
-        specifier: ^5.6.2
-        version: 5.6.2
       croner:
         specifier: ^9.1.0
         version: 9.1.0

@@ -40,12 +40,17 @@ export function createLogger(config?: LoggerConfig): Logger {
 
 	// Use pino-pretty for development-friendly output
 	if (pretty && !destination) {
+		const isDev = process.env.NODE_ENV !== "production";
+		const defaultSingleLine = isDev ? true : undefined;
 		options.transport = {
 			target: "pino-pretty",
 			options: {
 				colorize: true,
-				translateTime: "SYS:standard",
+				translateTime: `SYS:yyyy-mm-dd HH:MM:ss.l`,
 				ignore: "pid,hostname",
+				singleLine: defaultSingleLine,
+				messageFormat: "{if module}[{module}] {end}{msg}",
+				...config?.prettyOptions,
 			},
 		};
 	}

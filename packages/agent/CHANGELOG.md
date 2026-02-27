@@ -4,6 +4,10 @@
 
 ## [0.54.2] - 2026-02-23
 
+### Changed
+
+- Migrated internal logging from `console` to `@mariozechner/pi-observer` logger for structured, level-based output
+
 ## [0.54.1] - 2026-02-22
 
 ## [0.54.0] - 2026-02-19

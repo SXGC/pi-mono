@@ -1,4 +1,5 @@
 import type { Transport } from "@mariozechner/pi-ai";
+import type { LangfuseConfig } from "@mariozechner/pi-observer/tracing";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
@@ -10,12 +11,7 @@ export interface CompactionSettings {
 	keepRecentTokens?: number; // default: 20000
 }
 
-export interface LangfuseSettings {
-	enabled: boolean;
-	secretKey?: string;
-	publicKey?: string;
-	baseUrl?: string;
-}
+export type LangfuseSettings = LangfuseConfig;
 
 /**
  * OTLP exporter settings for distributed tracing.

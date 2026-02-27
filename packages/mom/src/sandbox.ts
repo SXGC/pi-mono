@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { log } from "./log.js";
 
 export type SandboxConfig = { type: "host" } | { type: "docker"; container: string };
 
@@ -9,12 +10,12 @@ export function parseSandboxArg(value: string): SandboxConfig {
 	if (value.startsWith("docker:")) {
 		const container = value.slice("docker:".length);
 		if (!container) {
-			console.error("Error: docker sandbox requires container name (e.g., docker:mom-sandbox)");
+			log.error("Docker sandbox requires container name (e.g., docker:mom-sandbox)");
 			process.exit(1);
 		}
 		return { type: "docker", container };
 	}
-	console.error(`Error: Invalid sandbox type '${value}'. Use 'host' or 'docker:<container-name>'`);
+	log.error(`Invalid sandbox type '${value}'. Use 'host' or 'docker:<container-name>'`);
 	process.exit(1);
 }
 
@@ -27,7 +28,7 @@ export async function validateSandbox(config: SandboxConfig): Promise<void> {
 	try {
 		await execSimple("docker", ["--version"]);
 	} catch {
-		console.error("Error: Docker is not installed or not in PATH");
+		log.error("Docker is not installed or not in PATH");
 		process.exit(1);
 	}
 
@@ -35,17 +36,15 @@ export async function validateSandbox(config: SandboxConfig): Promise<void> {
 	try {
 		const result = await execSimple("docker", ["inspect", "-f", "{{.State.Running}}", config.container]);
 		if (result.trim() !== "true") {
-			console.error(`Error: Container '${config.container}' is not running.`);
-			console.error(`Start it with: docker start ${config.container}`);
+			log.error(`Container '${config.container}' is not running. Start it with: docker start ${config.container}`);
 			process.exit(1);
 		}
 	} catch {
-		console.error(`Error: Container '${config.container}' does not exist.`);
-		console.error("Create it with: ./docker.sh create <data-dir>");
+		log.error(`Container '${config.container}' does not exist. Create it with: ./docker.sh create <data-dir>`);
 		process.exit(1);
 	}
 
-	console.log(`  Docker container '${config.container}' is running.`);
+	log.info(`Docker container '${config.container}' is running.`);
 }
 
 function execSimple(cmd: string, args: string[]): Promise<string> {

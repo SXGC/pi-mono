@@ -17,11 +17,11 @@ export type ExporterType = "langfuse" | "otlp";
  */
 export interface LangfuseExporterConfig {
 	type: "langfuse";
-	/** Langfuse secret key (falls back to LANGFUSE_SECRET_KEY env var) */
+	/** Langfuse secret key */
 	secretKey?: string;
-	/** Langfuse public key (falls back to LANGFUSE_PUBLIC_KEY env var) */
+	/** Langfuse public key */
 	publicKey?: string;
-	/** Langfuse base URL (falls back to LANGFUSE_BASE_URL env var) */
+	/** Langfuse base URL */
 	baseUrl?: string;
 }
 
@@ -61,6 +61,15 @@ export interface LoggerConfig {
 	level?: LogLevel;
 	/** Use pino-pretty for formatted output (default: true in development) */
 	pretty?: boolean;
+	/** Options for pino-pretty (only used when pretty is true) */
+	prettyOptions?: {
+		/** Output each log on a single line (default: true in development, undefined in production) */
+		singleLine?: boolean;
+		/** Hide field names in output (default: false) */
+		hide?: string;
+		/** Custom message format */
+		messageFormat?: string;
+	};
 	/** Logger instance name for identification */
 	name?: string;
 	/** Custom output stream (default: stdout) */

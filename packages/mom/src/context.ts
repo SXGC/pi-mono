@@ -3,17 +3,19 @@
  *
  * Mom uses two files per channel:
  * - context.jsonl: Structured API messages for LLM context (same format as coding-agent sessions)
- * - log.jsonl: Human-readable channel history for grep (no tool results)
+    - log.jsonl: Human-readable channel history for grep (no tool results)
  *
  * This module provides:
- * - syncLogToSessionManager: Syncs messages from log.jsonl to SessionManager
- * - MomSettingsManager: Simple settings for mom (compaction, retry, model preferences)
+    - syncLogToSessionManager: Syncs messages from log.jsonl to SessionManager
+    - MomSettingsManager: Simple settings for mom (compaction, retry, model preferences)
  */
 
 import type { UserMessage } from "@mariozechner/pi-ai";
 import type { SessionManager, SessionMessageEntry } from "@mariozechner/pi-coding-agent";
+import type { LangfuseConfig } from "@mariozechner/pi-observer/tracing";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
+import { log } from "./log.js";
 
 // ============================================================================
 // Sync log.jsonl to SessionManager
@@ -156,27 +158,17 @@ export interface MomRetrySettings {
 	maxRetries: number;
 	baseDelayMs: number;
 }
-
 export interface MomImageSettings {
 	autoResize: boolean;
 }
-
 export interface MomBranchSummarySettings {
 	reserveTokens: number;
 }
-
-export interface MomLangfuseSettings {
-	enabled: boolean;
-	secretKey?: string;
-	publicKey?: string;
-	baseUrl?: string;
-}
-
+export type MomLangfuseSettings = LangfuseConfig;
 export interface MomFallbackModel {
 	provider: string;
 	modelId: string;
 }
-
 export interface MomFallbackSettings {
 	enabled?: boolean;
 	models?: MomFallbackModel[];
@@ -205,25 +197,22 @@ export interface MomSettings {
 	response?: Partial<MomResponseSettings>;
 	shellCommandPrefix?: string;
 	theme?: string;
+	logLevel?: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 	obsidianPath?: string;
 }
-
 const DEFAULT_COMPACTION: MomCompactionSettings = {
 	enabled: true,
 	reserveTokens: 16384,
 	keepRecentTokens: 20000,
 };
-
 const DEFAULT_RETRY: MomRetrySettings = {
 	enabled: true,
 	maxRetries: 3,
 	baseDelayMs: 2000,
 };
-
 const DEFAULT_IMAGES: MomImageSettings = {
 	autoResize: true,
 };
-
 const DEFAULT_BRANCH_SUMMARY: MomBranchSummarySettings = {
 	reserveTokens: 16384,
 };
@@ -268,7 +257,7 @@ export class MomSettingsManager {
 			}
 			writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2), "utf-8");
 		} catch (error) {
-			console.error(`Warning: Could not save settings file: ${error}`);
+			log.warn({ error: String(error) }, "Could not save settings file");
 		}
 	}
 
@@ -449,5 +438,14 @@ export class MomSettingsManager {
 
 	getHookTimeout(): number {
 		return 30000;
+	}
+
+	getLogLevel(): "trace" | "debug" | "info" | "warn" | "error" | "fatal" {
+		return this.settings.logLevel ?? "info";
+	}
+
+	setLogLevel(level: "trace" | "debug" | "info" | "warn" | "error" | "fatal"): void {
+		this.settings.logLevel = level;
+		this.save();
 	}
 }

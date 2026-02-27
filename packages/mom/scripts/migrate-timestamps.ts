@@ -8,6 +8,9 @@
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
+import { createLogger } from "@mariozechner/pi-observer";
+
+const log = createLogger({ name: "migrate-timestamps", level: "info" });
 
 function isMillisecondTimestamp(ts: string): boolean {
 	// Slack timestamps are seconds.microseconds, like "1764279530.533489"
@@ -48,13 +51,13 @@ function migrateFile(filePath: string): { total: number; migrated: number } {
 			if (msg.ts && isMillisecondTimestamp(msg.ts)) {
 				const oldTs = msg.ts;
 				msg.ts = convertToSlackTs(msg.ts);
-				console.log(`  Converted: ${oldTs} -> ${msg.ts}`);
+				log.debug({ oldTs, newTs: msg.ts }, `Converted: ${oldTs} -> ${msg.ts}`);
 				migrated++;
 			}
 			newLines.push(JSON.stringify(msg));
 		} catch (e) {
 			// Keep malformed lines as-is
-			console.log(`  Warning: Could not parse line: ${line.substring(0, 50)}...`);
+			log.warn({ line: line.substring(0, 50) }, "Could not parse line");
 			newLines.push(line);
 		}
 	}
@@ -70,7 +73,7 @@ function findLogFiles(dir: string): string[] {
 	const logFiles: string[] = [];
 	
 	if (!existsSync(dir)) {
-		console.error(`Directory not found: ${dir}`);
+		log.error({ dir }, "Directory not found");
 		return [];
 	}
 	
@@ -94,16 +97,16 @@ function findLogFiles(dir: string): string[] {
 // Main
 const dataDir = process.argv[2];
 if (!dataDir) {
-	console.error("Usage: npx tsx scripts/migrate-timestamps.ts <data-dir>");
-	console.error("Example: npx tsx scripts/migrate-timestamps.ts ./data");
+	log.error("Usage: npx tsx scripts/migrate-timestamps.ts <data-dir>");
+	log.error("Example: npx tsx scripts/migrate-timestamps.ts ./data");
 	process.exit(1);
 }
 
-console.log(`Scanning for log.jsonl files in: ${dataDir}\n`);
+log.info({ dataDir }, "Scanning for log.jsonl files");
 
 const logFiles = findLogFiles(dataDir);
 if (logFiles.length === 0) {
-	console.log("No log.jsonl files found.");
+	log.info("No log.jsonl files found");
 	process.exit(0);
 }
 
@@ -111,11 +114,11 @@ let totalMigrated = 0;
 let totalMessages = 0;
 
 for (const logFile of logFiles) {
-	console.log(`Processing: ${logFile}`);
+	log.info({ file: logFile }, "Processing");
 	const { total, migrated } = migrateFile(logFile);
 	totalMessages += total;
 	totalMigrated += migrated;
-	console.log(`  ${migrated}/${total} messages migrated\n`);
+	log.info({ migrated, total }, `${migrated}/${total} messages migrated`);
 }
 
-console.log(`Done! Migrated ${totalMigrated}/${totalMessages} total messages across ${logFiles.length} files.`);
+log.info({ totalMigrated, totalMessages, fileCount: logFiles.length }, `Done! Migrated ${totalMigrated}/${totalMessages} total messages across ${logFiles.length} files`);

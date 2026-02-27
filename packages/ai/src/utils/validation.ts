@@ -6,6 +6,7 @@ const Ajv = (AjvModule as any).default || AjvModule;
 const addFormats = (addFormatsModule as any).default || addFormatsModule;
 
 import type { Tool, ToolCall } from "../types.js";
+import { log } from "./logger.js";
 
 // Detect if we're in a browser extension environment with strict CSP
 // Chrome extensions with Manifest V3 don't allow eval/Function constructor
@@ -24,7 +25,7 @@ if (!isBrowserExtension) {
 		addFormats(ajv);
 	} catch (_e) {
 		// AJV initialization failed (likely CSP restriction)
-		console.warn("AJV validation disabled due to CSP restrictions");
+		log.warn("AJV validation disabled due to CSP restrictions");
 	}
 }
 

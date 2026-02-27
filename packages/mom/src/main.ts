@@ -81,7 +81,7 @@ const parsedArgs = parseArgs();
 // Handle --download mode
 if (parsedArgs.downloadChannel) {
 	if (!MOM_SLACK_BOT_TOKEN) {
-		console.error("Missing env: MOM_SLACK_BOT_TOKEN");
+		log.log.error("Missing env: MOM_SLACK_BOT_TOKEN");
 		process.exit(1);
 	}
 	await downloadChannel(parsedArgs.downloadChannel, MOM_SLACK_BOT_TOKEN);
@@ -90,15 +90,15 @@ if (parsedArgs.downloadChannel) {
 
 // Normal bot mode - require working dir
 if (!parsedArgs.workingDir) {
-	console.error("Usage: mom [--sandbox=host|docker:<name>] <working-directory>");
-	console.error("       mom --download <channel-id>");
+	log.log.error("Usage: mom [--sandbox=host|docker:<name>] <working-directory>");
+	log.log.error("       mom --download <channel-id>");
 	process.exit(1);
 }
 
 const { workingDir, sandbox } = { workingDir: parsedArgs.workingDir, sandbox: parsedArgs.sandbox };
 
 if (!MOM_SLACK_APP_TOKEN || !MOM_SLACK_BOT_TOKEN) {
-	console.error("Missing env: MOM_SLACK_APP_TOKEN, MOM_SLACK_BOT_TOKEN");
+	log.log.error("Missing env: MOM_SLACK_APP_TOKEN, MOM_SLACK_BOT_TOKEN");
 	process.exit(1);
 }
 
@@ -109,6 +109,7 @@ await validateSandbox(sandbox);
 // ============================================================================
 
 const settingsManager = new MomSettingsManager(workingDir);
+log.setLogLevel(settingsManager.getLogLevel());
 const langfuseSettings = settingsManager.getLangfuseSettings();
 observerLog.info(
 	`Langfuse telemetry settings: enabled=${langfuseSettings.enabled}, hasSecretKey=${!!langfuseSettings.secretKey}, hasPublicKey=${!!langfuseSettings.publicKey}`,
@@ -119,9 +120,7 @@ if (langfuseSettings.enabled) {
 		observerLog.warning(
 			"Langfuse telemetry enabled but credentials not configured. Skipping telemetry initialization.",
 		);
-		observerLog.warning(
-			"Set LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY environment variables, or configure langfuse settings in workspace settings.json",
-		);
+		observerLog.warning("Configure langfuse.secretKey and langfuse.publicKey in workspace settings.json");
 	} else {
 		const config: TelemetryConfig = {
 			enabled: true,
