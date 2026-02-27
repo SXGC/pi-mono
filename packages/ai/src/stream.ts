@@ -1,6 +1,5 @@
 import "./providers/register-builtins.js";
-import type { Span } from "@opentelemetry/api";
-import { getTracer, isTelemetryEnabled } from "./telemetry/tracer.js";
+import { getTracer, isTelemetryEnabled, logTelemetryDebug, type Span } from "@mariozechner/pi-observer/tracing";
 import "./utils/http-proxy.js";
 
 import { getApiProvider } from "./api-registry.js";
@@ -19,26 +18,6 @@ import { AssistantMessageEventStream as EventStream } from "./utils/event-stream
 
 export { getEnvApiKey } from "./env-api-keys.js";
 
-const TELEMETRY_DEBUG_ENV = ["LANGFUSE_DEBUG", "PI_TELEMETRY_DEBUG"] as const;
-
-function isTruthyEnv(value: string | undefined): boolean {
-	if (!value) return false;
-	return ["1", "true", "yes", "on"].includes(value.toLowerCase());
-}
-
-function isTelemetryDebugEnabled(): boolean {
-	return TELEMETRY_DEBUG_ENV.some((name) => isTruthyEnv(process.env[name]));
-}
-
-function logStreamTelemetryDebug(message: string, details?: Record<string, unknown>): void {
-	if (!isTelemetryDebugEnabled()) return;
-	if (details) {
-		console.info(`[langfuse-telemetry] ${message}`, details);
-		return;
-	}
-	console.info(`[langfuse-telemetry] ${message}`);
-}
-
 const MAX_SERIALIZED_ATTRIBUTE_LENGTH = 120_000;
 const DEFAULT_TELEMETRY_USER_ID = "pi";
 
@@ -55,7 +34,7 @@ function serializeForAttribute(value: unknown): string | undefined {
 		}
 		return `${serialized.slice(0, MAX_SERIALIZED_ATTRIBUTE_LENGTH)}...[truncated ${serialized.length - MAX_SERIALIZED_ATTRIBUTE_LENGTH} chars]`;
 	} catch (error) {
-		logStreamTelemetryDebug("failed to serialize telemetry attribute", {
+		logTelemetryDebug("failed to serialize telemetry attribute", {
 			error: error instanceof Error ? error.message : String(error),
 		});
 		return undefined;
@@ -175,7 +154,7 @@ function createLlmCallSpan<TApi extends Api>(
 	options?: StreamOptions,
 ): Span | undefined {
 	if (!isTelemetryEnabled()) {
-		logStreamTelemetryDebug("skip span creation: telemetry disabled in stream module", {
+		logTelemetryDebug("skip span creation: telemetry disabled in stream module", {
 			model: model.id,
 			provider: model.provider,
 			sessionId: options?.sessionId,
@@ -185,7 +164,7 @@ function createLlmCallSpan<TApi extends Api>(
 
 	const tracer = getTracer();
 	if (!tracer) {
-		logStreamTelemetryDebug("skip span creation: tracer unavailable", {
+		logTelemetryDebug("skip span creation: tracer unavailable", {
 			model: model.id,
 			provider: model.provider,
 			sessionId: options?.sessionId,
@@ -225,7 +204,7 @@ function createLlmCallSpan<TApi extends Api>(
 		attributes,
 	});
 
-	logStreamTelemetryDebug("llm-call span started", {
+	logTelemetryDebug("llm-call span started", {
 		model: model.id,
 		provider: model.provider,
 		sessionId: options?.sessionId,

@@ -17,6 +17,29 @@ export interface LangfuseSettings {
 	baseUrl?: string;
 }
 
+/**
+ * OTLP exporter settings for distributed tracing.
+ */
+export interface OTLPSettings {
+	/** OTLP endpoint URL */
+	endpoint?: string;
+	/** Optional headers for authentication */
+	headers?: Record<string, string>;
+}
+
+/**
+ * Generic tracing settings supporting multiple exporters.
+ * This is the preferred way to configure tracing going forward.
+ */
+export interface TracingSettings {
+	/** Whether tracing is enabled */
+	enabled: boolean;
+	/** Langfuse exporter settings (mutually exclusive with exporters) */
+	langfuse?: Omit<LangfuseSettings, "enabled">;
+	/** OTLP exporter settings */
+	otlp?: OTLPSettings;
+}
+
 export interface BranchSummarySettings {
 	reserveTokens?: number; // default: 16384 (tokens reserved for prompt + LLM response)
 }
@@ -112,6 +135,7 @@ export interface Settings {
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
 	langfuse?: LangfuseSettings;
+	tracing?: TracingSettings;
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -983,6 +1007,34 @@ export class SettingsManager {
 	setLangfuseSettings(settings: LangfuseSettings): void {
 		this.globalSettings.langfuse = settings;
 		this.markModified("langfuse");
+		this.save();
+	}
+
+	/**
+	 * Get tracing settings. Falls back to langfuse settings for backward compatibility.
+	 */
+	getTracingSettings(): TracingSettings {
+		if (this.settings.tracing) {
+			return this.settings.tracing;
+		}
+		// Fallback to langfuse settings for backward compatibility
+		const langfuse = this.settings.langfuse;
+		if (langfuse?.enabled) {
+			return {
+				enabled: true,
+				langfuse: {
+					secretKey: langfuse.secretKey,
+					publicKey: langfuse.publicKey,
+					baseUrl: langfuse.baseUrl,
+				},
+			};
+		}
+		return { enabled: false };
+	}
+
+	setTracingSettings(settings: TracingSettings): void {
+		this.globalSettings.tracing = settings;
+		this.markModified("tracing");
 		this.save();
 	}
 }

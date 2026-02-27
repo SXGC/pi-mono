@@ -25,9 +25,9 @@ import type {
 } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@mariozechner/pi-ai";
 import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@mariozechner/pi-ai";
+import { type Span, startSessionSpan, startToolSpan, startTurnSpan } from "@mariozechner/pi-observer/tracing";
 import { getDocsPath } from "../config.js";
 import { theme } from "../modes/interactive/theme/theme.js";
-import { startSessionSpan, startToolSpan, startTurnSpan } from "../telemetry/index.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";
 import { sleep } from "../utils/sleep.js";
 import { type BashResult, executeBash as executeBashCommand, executeBashWithOperations } from "./bash-executor.js";
@@ -280,7 +280,7 @@ export class AgentSession {
 	// Telemetry spans
 	private _currentSessionSpan: ReturnType<typeof startSessionSpan> = undefined;
 	private _currentTurnSpans: Map<number, ReturnType<typeof startTurnSpan>> = new Map();
-	private _currentToolSpans: Map<string, import("@opentelemetry/api").Span> = new Map();
+	private _currentToolSpans: Map<string, Span> = new Map();
 	// Model registry for API key resolution
 	private _modelRegistry: ModelRegistry;
 

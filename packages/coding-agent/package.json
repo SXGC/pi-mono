@@ -44,9 +44,12 @@
 		"@mariozechner/jiti": "^2.6.2",
 		"@mariozechner/pi-agent-core": "workspace:*",
 		"@mariozechner/pi-ai": "workspace:*",
+		"@mariozechner/pi-observer": "workspace:*",
 		"@mariozechner/pi-tui": "workspace:*",
 		"@opentelemetry/api": "^1.9.0",
 		"@opentelemetry/sdk-node": "^0.212.0",
+		"@sinclair/typebox": "^0.34.41",
+		"ajv": "^8.17.1",
 		"@silvia-odwyer/photon-node": "^0.3.4",
 		"chalk": "^5.5.0",
 		"cli-highlight": "^2.1.11",
@@ -58,6 +61,7 @@
 		"marked": "^15.0.12",
 		"minimatch": "^10.1.1",
 		"proper-lockfile": "^4.1.2",
+		"strip-ansi": "^7.1.2",
 		"yaml": "^2.8.2"
 	},
 	"overrides": {
@@ -70,6 +74,8 @@
 		"@mariozechner/clipboard": "^0.3.2"
 	},
 	"devDependencies": {
+		"@anthropic-ai/sandbox-runtime": "^0.0.39",
+		"@anthropic-ai/sdk": "^0.73.0",
 		"@opentelemetry/sdk-trace-base": "^2.5.1",
 		"@types/diff": "^7.0.2",
 		"@types/hosted-git-info": "^3.0.5",
