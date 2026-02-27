@@ -6,48 +6,25 @@
 
 import { LangfuseSpanProcessor } from "@langfuse/otel";
 import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { getLogger } from "../../logger/index.js";
 import type { LangfuseExporterConfig } from "../types.js";
 
-/**
- * Debug environment variable names.
- */
-const TELEMETRY_DEBUG_ENV = ["LANGFUSE_DEBUG", "PI_TELEMETRY_DEBUG"] as const;
+const log = getLogger({ name: "pi-observer" });
 
 /**
- * Check if a value is truthy.
- */
-function isTruthyEnv(value: string | undefined): boolean {
-	if (!value) return false;
-	return ["1", "true", "yes", "on"].includes(value.toLowerCase());
-}
-
-/**
- * Check if telemetry debug mode is enabled.
- */
-export function isTelemetryDebugEnabled(): boolean {
-	return TELEMETRY_DEBUG_ENV.some((name) => isTruthyEnv(process.env[name]));
-}
-
-/**
- * Log telemetry debug message.
+ * Log telemetry debug message using observer logger.
  */
 export function logTelemetryDebug(message: string, details?: Record<string, unknown>): void {
-	if (!isTelemetryDebugEnabled()) return;
 	if (details) {
-		console.info(`[pi-observer] ${message}`, details);
+		log.debug(details, message);
 		return;
 	}
-	console.info(`[pi-observer] ${message}`);
+	log.debug(message);
 }
-
 /**
  * Attach debug hooks to a span processor.
  */
 function attachSpanProcessorDebugHooks(spanProcessor: LangfuseSpanProcessor): LangfuseSpanProcessor {
-	if (!isTelemetryDebugEnabled()) {
-		return spanProcessor;
-	}
-
 	type ProcessorOnStartSpan = Parameters<LangfuseSpanProcessor["onStart"]>[0];
 	type ProcessorOnStartContext = Parameters<LangfuseSpanProcessor["onStart"]>[1];
 	type ProcessorOnEndSpan = Parameters<LangfuseSpanProcessor["onEnd"]>[0];
@@ -119,9 +96,9 @@ function attachSpanProcessorDebugHooks(spanProcessor: LangfuseSpanProcessor): La
  * @returns Langfuse span processor
  */
 export function createLangfuseSpanProcessor(config: LangfuseExporterConfig): SpanProcessor {
-	const secretKey = config.secretKey ?? process.env.LANGFUSE_SECRET_KEY;
-	const publicKey = config.publicKey ?? process.env.LANGFUSE_PUBLIC_KEY;
-	const baseUrl = config.baseUrl ?? process.env.LANGFUSE_BASE_URL;
+	const secretKey = config.secretKey;
+	const publicKey = config.publicKey;
+	const baseUrl = config.baseUrl;
 
 	logTelemetryDebug("creating Langfuse span processor", {
 		hasSecretKey: Boolean(secretKey),
@@ -131,7 +108,7 @@ export function createLangfuseSpanProcessor(config: LangfuseExporterConfig): Spa
 
 	if (!secretKey || !publicKey) {
 		throw new Error(
-			"Langfuse credentials not configured. Set LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY environment variables.",
+			"Langfuse credentials not configured in settings file. Set langfuse.secretKey and langfuse.publicKey.",
 		);
 	}
 

@@ -15,6 +15,7 @@ import type {
 	StreamOptions,
 } from "./types.js";
 import { AssistantMessageEventStream as EventStream } from "./utils/event-stream.js";
+import { log } from "./utils/logger.js";
 
 export { getEnvApiKey } from "./env-api-keys.js";
 
@@ -317,12 +318,18 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 
 						span.setAttributes(doneAttributes);
 					} catch (spanError) {
-						console.warn("Failed to set span attributes:", spanError);
+						log.warn(
+							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
+							"Failed to set span attributes",
+						);
 					}
 					try {
 						span.end();
 					} catch (spanError) {
-						console.warn("Failed to end span:", spanError);
+						log.warn(
+							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
+							"Failed to end span",
+						);
 					}
 				}
 				// Record error on error event
@@ -345,12 +352,18 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 							span.recordException(new Error(event.error.errorMessage));
 						}
 					} catch (spanError) {
-						console.warn("Failed to record exception:", spanError);
+						log.warn(
+							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
+							"Failed to record exception",
+						);
 					}
 					try {
 						span.end();
 					} catch (spanError) {
-						console.warn("Failed to end span:", spanError);
+						log.warn(
+							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
+							"Failed to end span",
+						);
 					}
 				}
 			}
@@ -359,12 +372,18 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 			try {
 				span.recordException(error instanceof Error ? error : new Error(String(error)));
 			} catch (spanError) {
-				console.warn("Failed to record exception:", spanError);
+				log.warn(
+					{ error: spanError instanceof Error ? spanError.message : String(spanError) },
+					"Failed to record exception",
+				);
 			}
 			try {
 				span.end();
 			} catch (spanError) {
-				console.warn("Failed to end span:", spanError);
+				log.warn(
+					{ error: spanError instanceof Error ? spanError.message : String(spanError) },
+					"Failed to end span",
+				);
 			}
 			// Propagate error to wrapped stream
 			wrappedStream.push({

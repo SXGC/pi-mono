@@ -1,250 +1,207 @@
-import chalk from "chalk";
+/**
+ * Centralized logging for mom package using observer module.
+ */
+
+import { createLogger as createPinoLogger, type Logger, type LogLevel } from "@mariozechner/pi-observer";
 
 export interface LogContext {
 	channelId: string;
 	userName?: string;
-	channelName?: string; // For display like #dev-team vs C16HET4EQ
+	channelName?: string;
 }
 
 export type LogModule = "system" | "observer" | "agent" | "slack" | "store" | "events";
 
 export interface ModuleLogger {
-	info(message: string): void;
-	warning(message: string, details?: string): void;
+	info(message: string, fields?: Record<string, unknown>): void;
+	warning(message: string, details?: string, fields?: Record<string, unknown>): void;
 	agentError(ctx: LogContext | "system", error: string): void;
 	backfillStart(channelCount: number): void;
 	backfillChannel(channelName: string, messageCount: number): void;
 	backfillComplete(totalMessages: number, durationMs: number): void;
 }
 
-function timestamp(): string {
-	const now = new Date();
-	const hh = String(now.getHours()).padStart(2, "0");
-	const mm = String(now.getMinutes()).padStart(2, "0");
-	const ss = String(now.getSeconds()).padStart(2, "0");
-	return `[${hh}:${mm}:${ss}]`;
+// Default log level - can be changed via setLogLevel()
+const DEFAULT_LOG_LEVEL: LogLevel = "info";
+
+// Main logger instance
+const log: Logger = createPinoLogger({
+	name: "pi-mom",
+	level: DEFAULT_LOG_LEVEL,
+});
+
+/**
+ * Set the log level at runtime.
+ * @param level - The log level to set
+ */
+export function setLogLevel(level: LogLevel): void {
+	log.level = level;
 }
 
-function formatContext(ctx: LogContext): string {
-	// DMs: [DM:username]
-	// Channels: [#channel-name:username] or [C16HET4EQ:username] if no name
-	if (ctx.channelId.startsWith("D")) {
-		return `[DM:${ctx.userName || ctx.channelId}]`;
-	}
-	const channel = ctx.channelName || ctx.channelId;
-	const user = ctx.userName || "unknown";
-	return `[${channel.startsWith("#") ? channel : `#${channel}`}:${user}]`;
+/**
+ * Format LogContext as structured fields for logging.
+ */
+function contextFields(ctx: LogContext): Record<string, unknown> {
+	return {
+		channelId: ctx.channelId,
+		channelName: ctx.channelName,
+		userName: ctx.userName,
+	};
 }
 
-function formatModule(module: LogModule): string {
-	return `[${module}]`;
-}
-
+/**
+ * Truncate text to max length with indicator.
+ */
 function truncate(text: string, maxLen: number): string {
 	if (text.length <= maxLen) return text;
 	return `${text.substring(0, maxLen)}\n(truncated at ${maxLen} chars)`;
 }
 
-function formatToolArgs(args: Record<string, unknown>): string {
-	const lines: string[] = [];
+/**
+ * Format tool arguments for logging.
+ */
+function formatToolArgs(args: Record<string, unknown>): Record<string, unknown> {
+	const result: Record<string, unknown> = {};
 
 	for (const [key, value] of Object.entries(args)) {
-		// Skip the label - it's already shown in the tool name
 		if (key === "label") continue;
+		if (key === "offset" || key === "limit") continue;
 
-		// For read tool, format path with offset/limit
 		if (key === "path" && typeof value === "string") {
 			const offset = args.offset as number | undefined;
 			const limit = args.limit as number | undefined;
 			if (offset !== undefined && limit !== undefined) {
-				lines.push(`${value}:${offset}-${offset + limit}`);
+				result.path = `${value}:${offset}-${offset + limit}`;
 			} else {
-				lines.push(value);
+				result.path = value;
 			}
 			continue;
 		}
 
-		// Skip offset/limit since we already handled them
-		if (key === "offset" || key === "limit") continue;
-
-		// For other values, format them
-		if (typeof value === "string") {
-			// Multi-line strings get indented
-			if (value.includes("\n")) {
-				lines.push(value);
-			} else {
-				lines.push(value);
-			}
-		} else {
-			lines.push(JSON.stringify(value));
-		}
+		result[key] = value;
 	}
 
-	return lines.join("\n");
+	return result;
 }
 
 // User messages
 export function logUserMessage(ctx: LogContext, text: string): void {
-	console.log(chalk.green(`${timestamp()} ${formatContext(ctx)} ${text}`));
+	log.info({ ...contextFields(ctx), text }, "User message");
 }
 
 // Tool execution
 export function logToolStart(ctx: LogContext, toolName: string, label: string, args: Record<string, unknown>): void {
-	const formattedArgs = formatToolArgs(args);
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ↳ ${toolName}: ${label}`));
-	if (formattedArgs) {
-		// Indent the args
-		const indented = formattedArgs
-			.split("\n")
-			.map((line) => `           ${line}`)
-			.join("\n");
-		console.log(chalk.dim(indented));
-	}
+	log.debug(
+		{
+			...contextFields(ctx),
+			toolName,
+			toolLabel: label,
+			args: formatToolArgs(args),
+		},
+		`Tool started: ${toolName}`,
+	);
 }
 
 export function logToolSuccess(ctx: LogContext, toolName: string, durationMs: number, result: string): void {
-	const duration = (durationMs / 1000).toFixed(1);
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ✓ ${toolName} (${duration}s)`));
-
 	const truncated = truncate(result, 1000);
-	if (truncated) {
-		const indented = truncated
-			.split("\n")
-			.map((line) => `           ${line}`)
-			.join("\n");
-		console.log(chalk.dim(indented));
-	}
+	log.info(
+		{
+			...contextFields(ctx),
+			toolName,
+			durationMs,
+			result: truncated,
+		},
+		`Tool completed: ${toolName}`,
+	);
 }
 
 export function logToolError(ctx: LogContext, toolName: string, durationMs: number, error: string): void {
-	const duration = (durationMs / 1000).toFixed(1);
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ✗ ${toolName} (${duration}s)`));
-
 	const truncated = truncate(error, 1000);
-	const indented = truncated
-		.split("\n")
-		.map((line) => `           ${line}`)
-		.join("\n");
-	console.log(chalk.dim(indented));
+	log.error(
+		{
+			...contextFields(ctx),
+			toolName,
+			durationMs,
+			error: truncated,
+		},
+		`Tool failed: ${toolName}`,
+	);
 }
 
 // Response streaming
 export function logResponseStart(ctx: LogContext): void {
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} → Streaming response...`));
+	log.debug({ ...contextFields(ctx) }, "Streaming response");
 }
 
 export function logThinking(ctx: LogContext, thinking: string): void {
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} 💭 Thinking`));
 	const truncated = truncate(thinking, 1000);
-	const indented = truncated
-		.split("\n")
-		.map((line) => `           ${line}`)
-		.join("\n");
-	console.log(chalk.dim(indented));
+	log.debug({ ...contextFields(ctx), thinking: truncated }, "Thinking");
 }
 
 export function logResponse(ctx: LogContext, text: string): void {
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} 💬 Response`));
 	const truncated = truncate(text, 1000);
-	const indented = truncated
-		.split("\n")
-		.map((line) => `           ${line}`)
-		.join("\n");
-	console.log(chalk.dim(indented));
+	log.debug({ ...contextFields(ctx), response: truncated }, "Response");
 }
 
 // Attachments
 export function logDownloadStart(ctx: LogContext, filename: string, localPath: string): void {
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ↓ Downloading attachment`));
-	console.log(chalk.dim(`           ${filename} → ${localPath}`));
+	log.info({ ...contextFields(ctx), filename, localPath }, "Downloading attachment");
 }
 
 export function logDownloadSuccess(ctx: LogContext, sizeKB: number): void {
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ✓ Downloaded (${sizeKB.toLocaleString()} KB)`));
+	log.info({ ...contextFields(ctx), sizeKB }, "Download completed");
 }
 
 export function logDownloadError(ctx: LogContext, filename: string, error: string): void {
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ✗ Download failed`));
-	console.log(chalk.dim(`           ${filename}: ${error}`));
+	log.error({ ...contextFields(ctx), filename, error }, "Download failed");
 }
 
 // Control
 export function logStopRequest(ctx: LogContext): void {
-	console.log(chalk.green(`${timestamp()} ${formatContext(ctx)} stop`));
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} ⊗ Stop requested - aborting`));
+	log.info({ ...contextFields(ctx) }, "Stop requested");
 }
 
-function logInfoWithModule(module: LogModule, message: string): void {
-	console.log(chalk.blue(`${timestamp()} ${formatModule(module)} ${message}`));
-}
-
-function logWarningWithModule(module: LogModule, message: string, details?: string): void {
-	console.log(chalk.yellow(`${timestamp()} ${formatModule(module)} ⚠ ${message}`));
-	if (details) {
-		const indented = details
-			.split("\n")
-			.map((line) => `           ${line}`)
-			.join("\n");
-		console.log(chalk.dim(indented));
-	}
-}
-
-function logAgentErrorWithModule(module: LogModule, ctx: LogContext | "system", error: string): void {
-	const context = ctx === "system" ? formatModule(module) : `${formatModule(module)} ${formatContext(ctx)}`;
-	console.log(chalk.yellow(`${timestamp()} ${context} ✗ Agent error`));
-	const indented = error
-		.split("\n")
-		.map((line) => `           ${line}`)
-		.join("\n");
-	console.log(chalk.dim(indented));
-}
-
-function logBackfillStartWithModule(module: LogModule, channelCount: number): void {
-	console.log(chalk.blue(`${timestamp()} ${formatModule(module)} Backfilling ${channelCount} channels...`));
-}
-
-function logBackfillChannelWithModule(module: LogModule, channelName: string, messageCount: number): void {
-	console.log(chalk.blue(`${timestamp()} ${formatModule(module)}   #${channelName}: ${messageCount} messages`));
-}
-
-function logBackfillCompleteWithModule(module: LogModule, totalMessages: number, durationMs: number): void {
-	const duration = (durationMs / 1000).toFixed(1);
-	console.log(
-		chalk.blue(`${timestamp()} ${formatModule(module)} Backfill complete: ${totalMessages} messages in ${duration}s`),
-	);
-}
-
-export function createLogger(module: LogModule): ModuleLogger {
+// Module logger factory
+export function createModuleLogger(module: LogModule): ModuleLogger {
 	return {
-		info(message: string): void {
-			logInfoWithModule(module, message);
+		info(message: string, fields?: Record<string, unknown>): void {
+			log.info({ module, ...fields }, message);
 		},
-		warning(message: string, details?: string): void {
-			logWarningWithModule(module, message, details);
+		warning(message: string, details?: string, fields?: Record<string, unknown>): void {
+			log.warn({ module, details, ...fields }, message);
 		},
 		agentError(ctx: LogContext | "system", error: string): void {
-			logAgentErrorWithModule(module, ctx, error);
+			if (ctx === "system") {
+				log.error({ module, error }, "Agent error");
+			} else {
+				log.error({ module, ...contextFields(ctx), error }, "Agent error");
+			}
 		},
 		backfillStart(channelCount: number): void {
-			logBackfillStartWithModule(module, channelCount);
+			log.info({ module, channelCount }, "Backfill started");
 		},
 		backfillChannel(channelName: string, messageCount: number): void {
-			logBackfillChannelWithModule(module, channelName, messageCount);
+			log.debug({ module, channelName, messageCount }, "Backfill channel");
 		},
 		backfillComplete(totalMessages: number, durationMs: number): void {
-			logBackfillCompleteWithModule(module, totalMessages, durationMs);
+			const duration = (durationMs / 1000).toFixed(1);
+			log.info({ module, totalMessages, durationMs, duration }, "Backfill completed");
 		},
 	};
 }
 
-const systemLogger = createLogger("system");
+// Alias for backward compatibility
+export const createLogger = createModuleLogger;
 
-export function logInfo(message: string): void {
-	systemLogger.info(message);
+// Default system logger
+const systemLogger = createModuleLogger("system");
+
+export function logInfo(message: string, fields?: Record<string, unknown>): void {
+	systemLogger.info(message, fields);
 }
 
-export function logWarning(message: string, details?: string): void {
-	systemLogger.warning(message, details);
+export function logWarning(message: string, details?: string, fields?: Record<string, unknown>): void {
+	systemLogger.warning(message, details, fields);
 }
 
 export function logAgentError(ctx: LogContext | "system", error: string): void {
@@ -295,35 +252,36 @@ export function logUsageSummary(
 
 	const summary = lines.join("\n");
 
-	// Log to console
-	console.log(chalk.yellow(`${timestamp()} ${formatContext(ctx)} 💰 Usage`));
-	console.log(
-		chalk.dim(
-			`           ${usage.input.toLocaleString()} in + ${usage.output.toLocaleString()} out` +
-				(usage.cacheRead > 0 || usage.cacheWrite > 0
-					? ` (${usage.cacheRead.toLocaleString()} cache read, ${usage.cacheWrite.toLocaleString()} cache write)`
-					: "") +
-				` = $${usage.cost.total.toFixed(4)}`,
-		),
+	// Log structured usage data
+	log.info(
+		{
+			...contextFields(ctx),
+			inputTokens: usage.input,
+			outputTokens: usage.output,
+			cacheRead: usage.cacheRead,
+			cacheWrite: usage.cacheWrite,
+			costTotal: usage.cost.total,
+			contextTokens,
+			contextWindow,
+			model,
+		},
+		"Usage summary",
 	);
 
 	return summary;
 }
 
-// Startup (no context needed)
+// Startup
 export function logStartup(workingDir: string, sandbox: string): void {
-	console.log("Starting mom bot...");
-	console.log(`  Working directory: ${workingDir}`);
-	console.log(`  Sandbox: ${sandbox}`);
+	log.info({ workingDir, sandbox }, "Starting mom bot");
 }
 
 export function logConnected(): void {
-	console.log("⚡️ Mom bot connected and listening!");
-	console.log("");
+	log.info("Mom bot connected and listening");
 }
 
 export function logDisconnected(): void {
-	console.log("Mom bot disconnected.");
+	log.info("Mom bot disconnected");
 }
 
 // Backfill
@@ -338,3 +296,6 @@ export function logBackfillChannel(channelName: string, messageCount: number): v
 export function logBackfillComplete(totalMessages: number, durationMs: number): void {
 	systemLogger.backfillComplete(totalMessages, durationMs);
 }
+
+// Export the logger for direct use in other modules
+export { log };

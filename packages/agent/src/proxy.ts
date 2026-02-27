@@ -15,6 +15,7 @@ import {
 	type StopReason,
 	type ToolCall,
 } from "@mariozechner/pi-ai";
+import { log } from "./logger.js";
 
 // Create stream class matching ProxyMessageEventStream
 class ProxyMessageEventStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
@@ -333,7 +334,7 @@ function processProxyEvent(
 
 		default: {
 			const _exhaustiveCheck: never = proxyEvent;
-			console.warn(`Unhandled proxy event type: ${(proxyEvent as any).type}`);
+			log.warn({ eventType: (proxyEvent as any).type }, "Unhandled proxy event type");
 			return undefined;
 		}
 	}

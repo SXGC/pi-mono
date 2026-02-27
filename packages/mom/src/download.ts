@@ -1,4 +1,5 @@
 import { LogLevel, WebClient } from "@slack/web-api";
+import { log } from "./log.js";
 
 interface Message {
 	ts: string;
@@ -30,7 +31,7 @@ function formatMessage(ts: string, user: string, text: string, indent = ""): str
 export async function downloadChannel(channelId: string, botToken: string): Promise<void> {
 	const client = new WebClient(botToken, { logLevel: LogLevel.ERROR });
 
-	console.error(`Fetching channel info for ${channelId}...`);
+	log.debug({ channelId }, "Fetching channel info");
 
 	// Get channel info
 	let channelName = channelId;
@@ -41,7 +42,7 @@ export async function downloadChannel(channelId: string, botToken: string): Prom
 		// DM channels don't have names, that's fine
 	}
 
-	console.error(`Downloading history for #${channelName} (${channelId})...`);
+	log.info({ channelId, channelName }, `Downloading history for #${channelName}`);
 
 	// Fetch all messages
 	const messages: Message[] = [];
@@ -59,7 +60,7 @@ export async function downloadChannel(channelId: string, botToken: string): Prom
 		}
 
 		cursor = response.response_metadata?.next_cursor;
-		console.error(`  Fetched ${messages.length} messages...`);
+		log.debug({ messageCount: messages.length }, `Fetched ${messages.length} messages`);
 	} while (cursor);
 
 	// Reverse to chronological order
@@ -69,11 +70,14 @@ export async function downloadChannel(channelId: string, botToken: string): Prom
 	const threadReplies = new Map<string, Message[]>();
 	const threadsToFetch = messages.filter((m) => m.reply_count && m.reply_count > 0);
 
-	console.error(`Fetching ${threadsToFetch.length} threads...`);
+	log.debug({ threadCount: threadsToFetch.length }, `Fetching ${threadsToFetch.length} threads`);
 
 	for (let i = 0; i < threadsToFetch.length; i++) {
 		const parent = threadsToFetch[i];
-		console.error(`  Thread ${i + 1}/${threadsToFetch.length} (${parent.reply_count} replies)...`);
+		log.debug(
+			{ threadIndex: i + 1, total: threadsToFetch.length, replyCount: parent.reply_count },
+			`Thread ${i + 1}/${threadsToFetch.length}`,
+		);
 
 		const replies: Message[] = [];
 		let threadCursor: string | undefined;
@@ -113,5 +117,8 @@ export async function downloadChannel(channelId: string, botToken: string): Prom
 		}
 	}
 
-	console.error(`Done! ${messages.length} messages, ${totalReplies} thread replies`);
+	log.info(
+		{ messageCount: messages.length, replyCount: totalReplies },
+		`Done! ${messages.length} messages, ${totalReplies} thread replies`,
+	);
 }

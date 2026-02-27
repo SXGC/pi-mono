@@ -206,4 +206,4 @@ export function safeSpanOperation<T>(operation: () => T, fallback: T): T {
 }
 
 // Re-export debug utilities
-export { isTelemetryDebugEnabled, logTelemetryDebug } from "./exporters/langfuse.js";
+export { logTelemetryDebug } from "./exporters/langfuse.js";

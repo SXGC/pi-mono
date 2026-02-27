@@ -4,7 +4,6 @@ export { startLLMCallSpan, startSessionSpan, startToolSpan, startTurnSpan } from
 export {
 	getTracer,
 	initTracing,
-	isTelemetryDebugEnabled,
 	isTelemetryEnabled,
 	logTelemetryDebug,
 	safeSpanOperation,

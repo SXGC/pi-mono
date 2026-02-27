@@ -6,6 +6,9 @@
 
 - Added OpenTelemetry/Langfuse telemetry support for LLM call tracking via `initTelemetry()` and related APIs
 
+### Changed
+
+- Migrated internal logging from `console` to `@mariozechner/pi-observer` logger for structured, level-based output
 ## [0.54.2] - 2026-02-23
 
 ## [0.54.1] - 2026-02-22
