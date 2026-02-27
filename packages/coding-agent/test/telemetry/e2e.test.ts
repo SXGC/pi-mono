@@ -234,6 +234,8 @@ describe("Telemetry E2E", () => {
 		expect(llmReadable.attributes["session.id"]).toBe(sessionId);
 		expect(llmReadable.attributes["gen_ai.usage.input_tokens"]).toBe(17);
 		expect(llmReadable.attributes["gen_ai.usage.output_tokens"]).toBe(9);
+		expect(llmReadable.attributes["gen_ai.usage.cache_read.input_tokens"]).toBe(0);
+		expect(llmReadable.attributes["gen_ai.usage.cache_creation.input_tokens"]).toBe(0);
 		expect(llmReadable.attributes["gen_ai.cost.total"]).toBe(0.03);
 
 		expect(toolReadable.attributes["tool.name"]).toBe("mock-tool");

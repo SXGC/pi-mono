@@ -36,12 +36,18 @@ export interface RichTextSection {
 export interface RichTextPreformatted {
 	type: "rich_text_preformatted";
 	elements: RichTextElement[];
-	border?: number;
+	border?: 0 | 1;
+}
+
+export interface RichTextQuote {
+	type: "rich_text_quote";
+	elements: RichTextElement[];
+	border?: 0 | 1;
 }
 
 export interface RichTextContent {
 	type: "rich_text";
-	elements: (RichTextSection | RichTextPreformatted)[];
+	elements: (RichTextSection | RichTextPreformatted | RichTextQuote)[];
 	block_id?: string;
 }
 

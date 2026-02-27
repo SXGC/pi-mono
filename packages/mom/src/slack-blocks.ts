@@ -29,6 +29,19 @@ function richTextPreformatted(text: string): RichTextContent {
 	};
 }
 
+// Helper to create a rich_text block with quote content
+function richTextQuote(text: string): RichTextContent {
+	return {
+		type: "rich_text",
+		elements: [
+			{
+				type: "rich_text_quote",
+				elements: [{ type: "text", text }],
+			},
+		],
+	};
+}
+
 // Generate a unique task ID
 function generateTaskId(): string {
 	return `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -37,18 +50,25 @@ function generateTaskId(): string {
 export function buildMarkdownPayload(text: string, kind: MarkdownKind): SlackBlockPayload {
 	const trimmed = text.trim();
 	const content = truncate(trimmed || "(empty)", MARKDOWN_MAX);
-	const label = kind === "thinking" ? "Thinking" : "Response";
-	const body = kind === "thinking" ? `*${label}*\n\n_${content}_` : `${content}`;
 
-	const block: MarkdownBlock = {
-		type: "markdown",
-		text: body,
-	};
-
-	return {
-		blocks: [block],
-		fallbackText: `${label}: ${content}`,
-	};
+	if (kind === "thinking") {
+		// Use rich_text_quote for thinking content
+		const block: RichTextContent = richTextQuote(content);
+		return {
+			blocks: [block],
+			fallbackText: `Thinking: ${content}`,
+		};
+	} else {
+		// Use markdown block for regular text
+		const block: MarkdownBlock = {
+			type: "markdown",
+			text: content,
+		};
+		return {
+			blocks: [block],
+			fallbackText: content,
+		};
+	}
 }
 
 export function buildTaskCardStartPayload(toolName: string, label: string, argsText: string): SlackBlockPayload {

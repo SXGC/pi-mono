@@ -296,14 +296,16 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 							outputTokens: msg.usage.output,
 							totalTokens: msg.usage.totalTokens,
 							reasoningTokens: 0,
-							cachedInputTokens: msg.usage.cacheRead,
+							cacheReadInputTokens: msg.usage.cacheRead,
+							cacheCreationInputTokens: msg.usage.cacheWrite,
 						});
 
 						const doneAttributes: Record<string, string | number | boolean> = {
 							"gen_ai.usage.input_tokens": msg.usage.input,
 							"gen_ai.usage.output_tokens": msg.usage.output,
 							"gen_ai.usage.total_tokens": msg.usage.totalTokens,
-							"gen_ai.usage.cached_input_tokens": msg.usage.cacheRead,
+							"gen_ai.usage.cache_read.input_tokens": msg.usage.cacheRead,
+							"gen_ai.usage.cache_creation.input_tokens": msg.usage.cacheWrite,
 							"gen_ai.usage.reasoning_tokens": 0,
 						};
 

@@ -9,6 +9,7 @@
 ### Changed
 
 - Migrated internal logging from `console` to `@mariozechner/pi-observer` logger for structured, level-based output
+- Fixed OpenTelemetry span attribute names for cache tokens to follow GenAI semantic conventions: `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_creation.input_tokens` (was `gen_ai.usage.cached_input_tokens`)
 ## [0.54.2] - 2026-02-23
 
 ## [0.54.1] - 2026-02-22
