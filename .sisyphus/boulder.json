@@ -1,9 +1,9 @@
 {
-  "active_plan": "/Users/cai/Dev/pi-mono/.sisyphus/plans/builtin-skills.md",
-  "started_at": "2026-02-26T07:34:05.990Z",
+  "active_plan": "/Users/cai/Dev/pi-mono/.sisyphus/plans/mom-conversation-queue.md",
+  "started_at": "2026-02-27T15:39:07.411Z",
   "session_ids": [
-    "ses_367217a6bffer0aiWNqlbrTkdi"
+    "ses_3603f111effe3QwXv6ZeFvg6H7"
   ],
-  "plan_name": "builtin-skills",
+  "plan_name": "mom-conversation-queue",
   "agent": "atlas"
 }

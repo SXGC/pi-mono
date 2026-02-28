@@ -21,7 +21,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { mkdir, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
-import { MomSettingsManager, syncLogToSessionManager } from "./context.js";
+import { MomSettingsManager } from "./context.js";
 import * as log from "./log.js";
 import { createExecutor, type SandboxConfig } from "./sandbox.js";
 import type { ChannelInfo, SlackContext, UserInfo } from "./slack.js";
@@ -842,15 +842,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			// Ensure channel directory exists
 			await mkdir(channelDir, { recursive: true });
 
-			// Sync messages from log.jsonl that arrived while we were offline or busy
-			// Exclude the current message (it will be added via prompt())
-			const syncedCount = syncLogToSessionManager(sessionManager, channelDir, ctx.message.ts);
-			if (syncedCount > 0) {
-				agentLog.info(`[${channelId}] Synced ${syncedCount} messages from log.jsonl`);
-			}
-
 			// Reload messages from context.jsonl
-			// This picks up any messages synced above
 			const reloadedSession = sessionManager.buildSessionContext();
 			if (reloadedSession.messages.length > 0) {
 				agent.replaceMessages(reloadedSession.messages);
