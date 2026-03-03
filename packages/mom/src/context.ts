@@ -124,7 +124,7 @@ export class MomSettingsManager {
 			}
 			writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2), "utf-8");
 		} catch (error) {
-			log.warn({ error: String(error) }, "Could not save settings file");
+			log.error({ error: String(error) }, "Could not save settings file");
 		}
 	}
 

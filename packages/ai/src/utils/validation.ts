@@ -25,7 +25,7 @@ if (!isBrowserExtension) {
 		addFormats(ajv);
 	} catch (_e) {
 		// AJV initialization failed (likely CSP restriction)
-		log.warn("AJV validation disabled due to CSP restrictions");
+		log.error("AJV validation disabled due to CSP restrictions");
 	}
 }
 

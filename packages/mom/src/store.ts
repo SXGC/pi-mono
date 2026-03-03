@@ -201,7 +201,7 @@ export class ChannelStore {
 				// Success - could add success logging here if we have context
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : String(error);
-				storeLog.warning("Failed to download attachment", `${item.localPath}: ${errorMsg}`);
+				storeLog.error("Failed to download attachment", `${item.localPath}: ${errorMsg}`);
 			}
 		}
 

@@ -173,7 +173,7 @@ class ChannelQueue {
 		try {
 			await work();
 		} catch (err) {
-			slackLog.warning("Queue error", err instanceof Error ? err.message : String(err));
+			slackLog.error("Queue error", err instanceof Error ? err.message : String(err));
 		}
 		this.processing = false;
 		this.processNext();
@@ -534,7 +534,7 @@ export class SlackBot {
 			void Promise.resolve()
 				.then(() => ack())
 				.catch((error: unknown) => {
-					slackLog.warning(
+					slackLog.error(
 						`[${channel}] Failed to ack ${eventType}`,
 						error instanceof Error ? error.message : String(error),
 					);
@@ -589,14 +589,14 @@ export class SlackBot {
 			if (slackEvent.text.toLowerCase().trim() === "stop") {
 				if (this.handler.isRunning(e.channel)) {
 					this.handler.handleStop(e.channel, this).catch((error: unknown) => {
-						slackLog.warning(
+						slackLog.error(
 							`[${e.channel}] Failed to handle stop command`,
 							error instanceof Error ? error.message : String(error),
 						);
 					}); // Don't await, don't queue
 				} else {
 					this.postMessage(e.channel, "_Nothing running_").catch((error: unknown) => {
-						slackLog.warning(
+						slackLog.error(
 							`[${e.channel}] Failed to post stop status`,
 							error instanceof Error ? error.message : String(error),
 						);
@@ -629,7 +629,7 @@ export class SlackBot {
 
 			// Enqueue message (handles both running and not running states)
 			this.enqueueUserMessage(slackEvent).catch((error: unknown) => {
-				slackLog.warning(
+				slackLog.error(
 					`[${slackEvent.channel}] Failed to enqueue user message`,
 					error instanceof Error ? error.message : String(error),
 				);
@@ -710,14 +710,14 @@ export class SlackBot {
 			if (slackEvent.text.toLowerCase().trim() === "stop") {
 				if (this.handler.isRunning(e.channel)) {
 					this.handler.handleStop(e.channel, this).catch((error: unknown) => {
-						slackLog.warning(
+						slackLog.error(
 							`[${e.channel}] Failed to handle stop command`,
 							error instanceof Error ? error.message : String(error),
 						);
 					}); // Don't await, don't queue
 				} else {
 					this.postMessage(e.channel, "_Nothing running_").catch((error: unknown) => {
-						slackLog.warning(
+						slackLog.error(
 							`[${e.channel}] Failed to post stop status`,
 							error instanceof Error ? error.message : String(error),
 						);
@@ -750,7 +750,7 @@ export class SlackBot {
 
 			// Enqueue message (handles both running and not running states)
 			this.enqueueUserMessage(slackEvent).catch((error: unknown) => {
-				slackLog.warning(
+				slackLog.error(
 					`[${e.channel}] Failed to enqueue message`,
 					error instanceof Error ? error.message : String(error),
 				);
@@ -898,7 +898,7 @@ export class SlackBot {
 				if (count > 0) slackLog.backfillChannel(channel.name, count);
 				totalMessages += count;
 			} catch (error) {
-				slackLog.warning(`Failed to backfill #${channel.name}`, String(error));
+				slackLog.error(`Failed to backfill #${channel.name}`, String(error));
 			}
 		}
 

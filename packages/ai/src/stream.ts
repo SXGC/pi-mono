@@ -320,7 +320,7 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 
 						span.setAttributes(doneAttributes);
 					} catch (spanError) {
-						log.warn(
+						log.error(
 							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
 							"Failed to set span attributes",
 						);
@@ -328,7 +328,7 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 					try {
 						span.end();
 					} catch (spanError) {
-						log.warn(
+						log.error(
 							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
 							"Failed to end span",
 						);
@@ -354,7 +354,7 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 							span.recordException(new Error(event.error.errorMessage));
 						}
 					} catch (spanError) {
-						log.warn(
+						log.error(
 							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
 							"Failed to record exception",
 						);
@@ -362,7 +362,7 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 					try {
 						span.end();
 					} catch (spanError) {
-						log.warn(
+						log.error(
 							{ error: spanError instanceof Error ? spanError.message : String(spanError) },
 							"Failed to end span",
 						);
@@ -374,7 +374,7 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 			try {
 				span.recordException(error instanceof Error ? error : new Error(String(error)));
 			} catch (spanError) {
-				log.warn(
+				log.error(
 					{ error: spanError instanceof Error ? spanError.message : String(spanError) },
 					"Failed to record exception",
 				);
@@ -382,7 +382,7 @@ function wrapStreamWithSpan(eventStream: AssistantMessageEventStream, span: Span
 			try {
 				span.end();
 			} catch (spanError) {
-				log.warn(
+				log.error(
 					{ error: spanError instanceof Error ? spanError.message : String(spanError) },
 					"Failed to end span",
 				);

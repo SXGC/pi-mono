@@ -25,7 +25,7 @@ export function startSessionSpan(sessionId: string, tracerName?: string): Span |
 			},
 		});
 	} catch (error) {
-		console.warn("Failed to start session span:", error);
+		console.error("Failed to start session span:", error);
 		return undefined;
 	}
 }
@@ -57,7 +57,7 @@ export function startTurnSpan(
 			...(parentSpan && { parent: parentSpan }),
 		});
 	} catch (error) {
-		console.warn("Failed to start turn span:", error);
+		console.error("Failed to start turn span:", error);
 		return undefined;
 	}
 }
@@ -82,7 +82,7 @@ export function startToolSpan(toolName: string, parentSpan?: Span, tracerName?: 
 			...(parentSpan && { parent: parentSpan }),
 		});
 	} catch (error) {
-		console.warn("Failed to start tool span:", error);
+		console.error("Failed to start tool span:", error);
 		return undefined;
 	}
 }
@@ -125,7 +125,7 @@ export function startLLMCallSpan(
 
 		return tracer.startSpan("llm-call", { attributes });
 	} catch (error) {
-		console.warn("Failed to start LLM call span:", error);
+		console.error("Failed to start LLM call span:", error);
 		return undefined;
 	}
 }

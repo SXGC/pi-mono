@@ -131,7 +131,7 @@ export class EventsWatcher {
 		try {
 			files = readdirSync(this.eventsDir).filter((f) => f.endsWith(".json"));
 		} catch (err) {
-			eventsLog.warning("Failed to read events directory", String(err));
+			eventsLog.error("Failed to read events directory", String(err));
 			return;
 		}
 
@@ -199,7 +199,7 @@ export class EventsWatcher {
 		}
 
 		if (!event) {
-			eventsLog.warning(`Failed to parse event file after ${MAX_RETRIES} retries: ${filename}`, lastError?.message);
+			eventsLog.error(`Failed to parse event file after ${MAX_RETRIES} retries: ${filename}`, lastError?.message);
 			this.deleteFile(filename);
 			return;
 		}
@@ -312,7 +312,7 @@ export class EventsWatcher {
 			const next = cron.nextRun();
 			eventsLog.info(`Scheduled periodic event: ${filename}, next run: ${next?.toISOString() ?? "unknown"}`);
 		} catch (err) {
-			eventsLog.warning(`Invalid cron schedule for ${filename}: ${event.schedule}`, String(err));
+			eventsLog.error(`Invalid cron schedule for ${filename}: ${event.schedule}`, String(err));
 			this.deleteFile(filename);
 		}
 	}
@@ -365,7 +365,7 @@ export class EventsWatcher {
 		} catch (err) {
 			// ENOENT is fine (file already deleted), other errors are warnings
 			if (err instanceof Error && "code" in err && err.code !== "ENOENT") {
-				eventsLog.warning(`Failed to delete event file: ${filename}`, String(err));
+				eventsLog.error(`Failed to delete event file: ${filename}`, String(err));
 			}
 		}
 		this.knownFiles.delete(filename);

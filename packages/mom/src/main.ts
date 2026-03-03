@@ -449,14 +449,14 @@ process.on("SIGTERM", async () => {
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
-	observerLog.warning(
+	observerLog.error(
 		"Unhandled promise rejection",
 		reason instanceof Error ? reason.stack || reason.message : String(reason),
 	);
 });
 
 void bot.start().catch((error: unknown) => {
-	observerLog.warning(
+	observerLog.error(
 		"Failed to start Slack bot",
 		error instanceof Error ? error.stack || error.message : String(error),
 	);

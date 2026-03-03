@@ -108,7 +108,7 @@ export function initTracing(config: TracingConfig): () => Promise<void> {
 	if (spanProcessors.length === 0) {
 		logTelemetryDebug("init skipped: no valid exporters", { errors });
 		if (errors.length > 0) {
-			console.warn("Failed to initialize any telemetry exporters:", errors.join("; "));
+			console.error("Failed to initialize any telemetry exporters:", errors.join("; "));
 		}
 		return async () => {};
 	}
@@ -145,7 +145,7 @@ export function initTracing(config: TracingConfig): () => Promise<void> {
 			error: error instanceof Error ? error.message : String(error),
 		});
 		// Silently degrade on initialization failure
-		console.warn("Failed to initialize telemetry:", error);
+		console.error("Failed to initialize telemetry:", error);
 		return async () => {};
 	}
 }
@@ -164,7 +164,7 @@ export async function shutdownTracing(): Promise<void> {
 		logTelemetryDebug("shutdownTracing failed", {
 			error: error instanceof Error ? error.message : String(error),
 		});
-		console.warn("Failed to shutdown telemetry:", error);
+		console.error("Failed to shutdown telemetry:", error);
 	} finally {
 		sdk = undefined;
 		tracer = undefined;
@@ -200,7 +200,7 @@ export function safeSpanOperation<T>(operation: () => T, fallback: T): T {
 	try {
 		return operation();
 	} catch (error) {
-		console.warn("Telemetry operation failed:", error);
+		console.error("Telemetry operation failed:", error);
 		return fallback;
 	}
 }

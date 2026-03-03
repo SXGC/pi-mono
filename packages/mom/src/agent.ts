@@ -72,7 +72,7 @@ function getMemory(channelDir: string): string {
 				parts.push(`### Global Workspace Memory\n${content}`);
 			}
 		} catch (error) {
-			agentLog.warning("Failed to read workspace memory", `${workspaceMemoryPath}: ${error}`);
+			agentLog.error("Failed to read workspace memory", `${workspaceMemoryPath}: ${error}`);
 		}
 	}
 
@@ -85,7 +85,7 @@ function getMemory(channelDir: string): string {
 				parts.push(`### Channel-Specific Memory\n${content}`);
 			}
 		} catch (error) {
-			agentLog.warning("Failed to read channel memory", `${channelMemoryPath}: ${error}`);
+			agentLog.error("Failed to read channel memory", `${channelMemoryPath}: ${error}`);
 		}
 	}
 
@@ -990,7 +990,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 					await ctx.respondInThread(`_Error: ${runState.errorMessage}_`);
 				} catch (err) {
 					const errMsg = err instanceof Error ? err.message : String(err);
-					agentLog.warning("Failed to post error message", errMsg);
+					agentLog.error("Failed to post error message", errMsg);
 				}
 			} else {
 				// Final message update
@@ -1009,7 +1009,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 						agentLog.info("Silent response - deleted message and thread");
 					} catch (err) {
 						const errMsg = err instanceof Error ? err.message : String(err);
-						agentLog.warning("Failed to delete message for silent response", errMsg);
+						agentLog.error("Failed to delete message for silent response", errMsg);
 					}
 				} else if (finalText.trim()) {
 					try {
@@ -1021,7 +1021,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 						await ctx.replaceMessageBlocks(payload.blocks, payload.fallbackText);
 					} catch (err) {
 						const errMsg = err instanceof Error ? err.message : String(err);
-						agentLog.warning("Failed to replace message with final text", errMsg);
+						agentLog.error("Failed to replace message with final text", errMsg);
 					}
 				}
 			}

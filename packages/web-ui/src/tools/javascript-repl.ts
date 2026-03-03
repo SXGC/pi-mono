@@ -232,7 +232,7 @@ export const javascriptReplRenderer: ToolRenderer<JavaScriptReplParams, JavaScri
 					try {
 						extractedText = atob(f.contentBase64);
 					} catch (_e) {
-						console.warn("Failed to decode base64 content for", f.fileName);
+						console.error("Failed to decode base64 content for", f.fileName);
 					}
 				}
 
