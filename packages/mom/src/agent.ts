@@ -902,7 +902,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 							await fn();
 						} catch (err) {
 							const errMsg = err instanceof Error ? err.message : String(err);
-							agentLog.warning(`Slack API error (${errorContext})`, errMsg);
+							agentLog.error(`Slack API error (${errorContext})`, errMsg);
 							try {
 								await ctx.respondInThread(`_Error: ${errMsg}_`);
 							} catch {
@@ -1027,7 +1027,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			}
 
 			// Log usage summary with context info
-			if (runState.totalUsage.cost.total > 0) {
+			if (runState.totalUsage.input + runState.totalUsage.output > 0) {
 				// Get last non-aborted assistant message for context calculation
 				const messages = session.messages;
 				const lastAssistantMessage = messages

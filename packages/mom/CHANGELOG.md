@@ -2,6 +2,10 @@
 
 ### Added
 - Added model fallback support: automatically switch to alternative models when the current model fails with retryable errors (rate limits, server errors). Configurable via `fallback` settings in `settings.json`.
+- Added `settings.env` startup environment injection and `MOM_LOG_LEVEL` support.
+
+### Changed
+- Removed legacy top-level `logLevel` setting from `settings.json`; use `env.MOM_LOG_LEVEL` instead.
 ## [0.54.2] - 2026-02-23
 
 ## [0.54.1] - 2026-02-22

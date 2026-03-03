@@ -56,6 +56,11 @@ pnpm check        # Lint, format, and type check
 
 > **Note:** `pnpm check` requires `pnpm build` to be run first. The web-ui package uses `tsc` which needs compiled `.d.ts` files from dependencies.
 
+
+## ENV
+
+MCPORTER_CONFIG: 配置 mcporter 的配置目录
+
 ## License
 
 MIT

@@ -154,6 +154,10 @@ Configure Langfuse telemetry for observability.
 
 ```json
 {
+  "env": {
+    "MOM_LOG_LEVEL": "debug",
+    "PI_OBSERVER_LOG_LEVEL": "debug"
+  },
   "shellCommandPrefix": "/bin/bash",
   "theme": "dark",
   "obsidianPath": "/path/to/obsidian/vault"
@@ -162,9 +166,15 @@ Configure Langfuse telemetry for observability.
 
 | Option | Type | Description |
 |--------|------|-------------|
+| `env` | object | Environment variables to inject at startup. Existing process env values take precedence (not overwritten). |
+| `env.MOM_LOG_LEVEL` | string | Log level for mom process (`trace`/`debug`/`info`/`warn`/`error`/`fatal`) |
 | `shellCommandPrefix` | string | Shell prefix for bash commands |
 | `theme` | string | UI theme preference |
 | `obsidianPath` | string | Path to Obsidian vault for note integration |
+
+Notes:
+- Log level is configured via `env.MOM_LOG_LEVEL` only.
+- Remove legacy top-level `logLevel` from `settings.json`.
 
 ## Full Example
 
@@ -200,6 +210,9 @@ Configure Langfuse telemetry for observability.
   },
   "langfuse": {
     "enabled": false
+  },
+  "env": {
+    "MOM_LOG_LEVEL": "debug"
   }
 }
 ```

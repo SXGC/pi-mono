@@ -14,6 +14,7 @@ export type LogModule = "system" | "observer" | "agent" | "slack" | "store" | "e
 
 export interface ModuleLogger {
 	info(message: string, fields?: Record<string, unknown>): void;
+	error(message: string, details?: string, fields?: Record<string, unknown>): void;
 	warning(message: string, details?: string, fields?: Record<string, unknown>): void;
 	agentError(ctx: LogContext | "system", error: string): void;
 	backfillStart(channelCount: number): void;
@@ -166,6 +167,9 @@ export function createModuleLogger(module: LogModule): ModuleLogger {
 	return {
 		info(message: string, fields?: Record<string, unknown>): void {
 			log.info({ module, ...fields }, message);
+		},
+		error(message: string, details?: string, fields?: Record<string, unknown>): void {
+			log.error({ module, details, ...fields }, message);
 		},
 		warning(message: string, details?: string, fields?: Record<string, unknown>): void {
 			log.warn({ module, details, ...fields }, message);

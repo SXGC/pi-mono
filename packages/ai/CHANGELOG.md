@@ -5,6 +5,7 @@
 ### Added
 
 - Added OpenTelemetry/Langfuse telemetry support for LLM call tracking via `initTelemetry()` and related APIs
+- Added `AI_LOG_LEVEL` environment variable to control `pi-ai` logger verbosity (`trace`/`debug`/`info`/`warn`/`error`/`fatal`, default `info`).
 
 ### Changed
 

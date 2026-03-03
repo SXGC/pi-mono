@@ -57,8 +57,15 @@ export interface MomSettings {
 	response?: Partial<MomResponseSettings>;
 	shellCommandPrefix?: string;
 	theme?: string;
-	logLevel?: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+	env?: Record<string, string>;
 	obsidianPath?: string;
+}
+
+const MOM_LOG_LEVELS = new Set(["trace", "debug", "info", "warn", "error", "fatal"]);
+
+function isMomLogLevel(value: string | undefined): value is "trace" | "debug" | "info" | "warn" | "error" | "fatal" {
+	if (!value) return false;
+	return MOM_LOG_LEVELS.has(value);
 }
 const DEFAULT_COMPACTION: MomCompactionSettings = {
 	enabled: true,
@@ -275,6 +282,32 @@ export class MomSettingsManager {
 		this.settings = this.load();
 	}
 
+	getEnv(): Record<string, string> {
+		const env: Record<string, string> = {};
+
+		const rawEnv = this.settings.env;
+		if (rawEnv && typeof rawEnv === "object") {
+			for (const [key, value] of Object.entries(rawEnv as Record<string, unknown>)) {
+				if (!key) continue;
+				if (typeof value !== "string") {
+					log.warn({ key, valueType: typeof value }, "Ignoring non-string settings.env value");
+					continue;
+				}
+				env[key] = value;
+			}
+		}
+
+		return env;
+	}
+
+	applyEnvToProcessEnv(): void {
+		const env = this.getEnv();
+		for (const [key, value] of Object.entries(env)) {
+			if (process.env[key] !== undefined) continue;
+			process.env[key] = value;
+		}
+	}
+
 	// Compatibility methods for AgentSession
 	getSteeringMode(): "all" | "one-at-a-time" {
 		return "one-at-a-time"; // Mom processes one message at a time
@@ -301,11 +334,22 @@ export class MomSettingsManager {
 	}
 
 	getLogLevel(): "trace" | "debug" | "info" | "warn" | "error" | "fatal" {
-		return this.settings.logLevel ?? "info";
+		const envLogLevel = process.env.MOM_LOG_LEVEL;
+		if (isMomLogLevel(envLogLevel)) {
+			return envLogLevel;
+		}
+		if (envLogLevel) {
+			log.warn({ MOM_LOG_LEVEL: envLogLevel }, "Invalid MOM_LOG_LEVEL, falling back to default");
+		}
+
+		return "info";
 	}
 
 	setLogLevel(level: "trace" | "debug" | "info" | "warn" | "error" | "fatal"): void {
-		this.settings.logLevel = level;
+		this.settings.env = {
+			...(this.settings.env ?? {}),
+			MOM_LOG_LEVEL: level,
+		};
 		this.save();
 	}
 }

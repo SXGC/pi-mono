@@ -99,6 +99,7 @@ await validateSandbox(sandbox);
 // ============================================================================
 
 const settingsManager = new MomSettingsManager(workingDir);
+settingsManager.applyEnvToProcessEnv();
 log.setLogLevel(settingsManager.getLogLevel());
 const langfuseSettings = settingsManager.getLangfuseSettings();
 observerLog.info(
@@ -405,7 +406,7 @@ const handler: MomHandler = {
 				}
 			}
 		} catch (err) {
-			observerLog.warning(`[${event.channel}] Run error`, err instanceof Error ? err.message : String(err));
+			observerLog.error(`[${event.channel}] Run error`, err instanceof Error ? err.message : String(err));
 		} finally {
 			state.running = false;
 		}

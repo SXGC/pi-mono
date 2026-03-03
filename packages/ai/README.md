@@ -908,6 +908,7 @@ In Node.js environments, you can set environment variables to avoid passing API 
 | MiniMax | `MINIMAX_API_KEY` |
 | Kimi For Coding | `KIMI_API_KEY` |
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` or `GH_TOKEN` or `GITHUB_TOKEN` |
+| AI package logger | `AI_LOG_LEVEL` (`trace`/`debug`/`info`/`warn`/`error`/`fatal`, default: `info`) |
 
 When set, the library automatically uses these keys:
 

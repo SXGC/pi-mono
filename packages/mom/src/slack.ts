@@ -145,6 +145,8 @@ export interface MomHandler {
 	getRunner(channelId: string): AgentRunner | undefined;
 }
 
+type SlackSendTarget = "main" | "thread" | "main-update" | "thread-update" | "delete" | "upload";
+
 // ============================================================================
 // Per-channel queue for sequential processing
 // ============================================================================
@@ -258,34 +260,124 @@ export class SlackBot {
 		return Array.from(this.channels.values());
 	}
 
+	private logSendAttempt(input: {
+		operation: string;
+		target: SlackSendTarget;
+		channel: string;
+		text?: string;
+		blocksCount?: number;
+		blocksJsonSize?: number;
+		messageTs?: string;
+		threadTs?: string;
+		filePath?: string;
+		title?: string;
+	}): void {
+		const normalizedPreview = input.text ? input.text.replace(/\s+/g, " ").trim() : "";
+		const preview =
+			normalizedPreview.length > 0
+				? normalizedPreview.length > 180
+					? `${normalizedPreview.substring(0, 177)}...`
+					: normalizedPreview
+				: undefined;
+		slackLog.info("Slack send attempt", {
+			channelId: input.channel,
+			channelName: this.channels.get(input.channel)?.name,
+			operation: input.operation,
+			target: input.target,
+			messageLength: input.text?.length ?? 0,
+			blocksCount: input.blocksCount,
+			blocksJsonSize: input.blocksJsonSize,
+			messageTs: input.messageTs,
+			threadTs: input.threadTs,
+			filePath: input.filePath,
+			title: input.title,
+			preview,
+		});
+	}
+
 	async postMessage(channel: string, text: string): Promise<string> {
+		this.logSendAttempt({
+			operation: "postMessage",
+			target: "main",
+			channel,
+			text,
+		});
 		const result = await this.webClient.chat.postMessage({ channel, text });
 		return result.ts as string;
 	}
 
 	async postMessageBlocks(channel: string, text: string, blocks: SlackBlock[]): Promise<string> {
+		const blocksJson = JSON.stringify(blocks);
+		this.logSendAttempt({
+			operation: "postMessageBlocks",
+			target: "main",
+			channel,
+			text,
+			blocksCount: blocks.length,
+			blocksJsonSize: blocksJson.length,
+		});
 		const result = await this.webClient.chat.postMessage({ channel, text, blocks });
 		return result.ts as string;
 	}
 
 	async updateMessage(channel: string, ts: string, text: string): Promise<void> {
+		this.logSendAttempt({
+			operation: "updateMessage",
+			target: "main-update",
+			channel,
+			text,
+			messageTs: ts,
+		});
 		await this.webClient.chat.update({ channel, ts, text });
 	}
 
 	async updateMessageBlocks(channel: string, ts: string, text: string, blocks: SlackBlock[]): Promise<void> {
+		const blocksJson = JSON.stringify(blocks);
+		this.logSendAttempt({
+			operation: "updateMessageBlocks",
+			target: "main-update",
+			channel,
+			text,
+			blocksCount: blocks.length,
+			blocksJsonSize: blocksJson.length,
+			messageTs: ts,
+		});
 		await this.webClient.chat.update({ channel, ts, text, blocks });
 	}
 
 	async deleteMessage(channel: string, ts: string): Promise<void> {
+		this.logSendAttempt({
+			operation: "deleteMessage",
+			target: "delete",
+			channel,
+			messageTs: ts,
+		});
 		await this.webClient.chat.delete({ channel, ts });
 	}
 
 	async postInThread(channel: string, threadTs: string, text: string): Promise<string> {
+		this.logSendAttempt({
+			operation: "postInThread",
+			target: "thread",
+			channel,
+			text,
+			threadTs,
+		});
 		const result = await this.webClient.chat.postMessage({ channel, thread_ts: threadTs, text });
 		return result.ts as string;
 	}
 
 	async postInThreadBlocks(channel: string, threadTs: string, text: string, blocks: SlackBlock[]): Promise<string> {
+		const blocksJson = JSON.stringify(blocks);
+		this.logSendAttempt({
+			operation: "postInThreadBlocks",
+			target: "thread",
+			channel,
+			text,
+			blocksCount: blocks.length,
+			blocksJsonSize: blocksJson.length,
+			threadTs,
+		});
 		const result = await this.webClient.chat.postMessage({
 			channel,
 			thread_ts: threadTs,
@@ -297,6 +389,14 @@ export class SlackBot {
 
 	async uploadFile(channel: string, filePath: string, title?: string): Promise<void> {
 		const fileName = title || basename(filePath);
+		this.logSendAttempt({
+			operation: "uploadFile",
+			target: "upload",
+			channel,
+			filePath,
+			title: fileName,
+			text: fileName,
+		});
 		const fileContent = readFileSync(filePath);
 		await this.webClient.files.uploadV2({
 			channel_id: channel,
