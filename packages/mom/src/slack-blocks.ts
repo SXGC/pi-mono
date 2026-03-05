@@ -8,12 +8,17 @@ export interface SlackBlockPayload {
 type MarkdownKind = "thinking" | "text";
 type TaskStatus = "in_progress" | "complete" | "error";
 
-const MARKDOWN_MAX = 10000; // Per block, total 12000 for all markdown blocks
-const CODE_MAX = 8000;
+const CODE_MAX = 3000; // Same limit for code blocks in task cards
 
 function truncate(text: string, max: number): string {
+	if (max <= 0) return "";
 	if (text.length <= max) return text;
+	if (max <= 3) return ".".repeat(max);
 	return `${text.slice(0, max - 3)}...`;
+}
+
+function buildFallbackText(text: string): string {
+	return text.trim() || "(empty)";
 }
 
 // Helper to create a rich_text block with preformatted (code block) content
@@ -49,14 +54,14 @@ function generateTaskId(): string {
 
 export function buildMarkdownPayload(text: string, kind: MarkdownKind): SlackBlockPayload {
 	const trimmed = text.trim();
-	const content = truncate(trimmed || "(empty)", MARKDOWN_MAX);
+	const content = trimmed || "(empty)";
 
 	if (kind === "thinking") {
 		// Use rich_text_quote for thinking content
 		const block: RichTextContent = richTextQuote(content);
 		return {
 			blocks: [block],
-			fallbackText: `Thinking: ${content}`,
+			fallbackText: buildFallbackText(`Thinking: ${content}`),
 		};
 	} else {
 		// Use markdown block for regular text
@@ -66,7 +71,7 @@ export function buildMarkdownPayload(text: string, kind: MarkdownKind): SlackBlo
 		};
 		return {
 			blocks: [block],
-			fallbackText: content,
+			fallbackText: buildFallbackText(content),
 		};
 	}
 }
@@ -88,7 +93,7 @@ export function buildTaskCardStartPayload(toolName: string, label: string, argsT
 
 	return {
 		blocks: [block],
-		fallbackText: `${toolName} [in_progress]${label ? ` ${label}` : ""}`,
+		fallbackText: buildFallbackText(`${toolName} [in_progress]${label ? ` ${label}` : ""}`),
 	};
 }
 
@@ -122,6 +127,6 @@ export function buildTaskCardResultPayload(
 
 	return {
 		blocks: [block],
-		fallbackText: `${toolName} [${status}] ${truncate(result || "(no result)", 300)}`,
+		fallbackText: buildFallbackText(`${toolName} [${status}] ${truncate(result || "(no result)", 300)}`),
 	};
 }

@@ -87,6 +87,7 @@ tmux kill-session -t pi-test
 - No emojis in commits, issues, PR comments, or code
 - No fluff or cheerful filler text
 - Technical prose only, be kind but direct (e.g., "Thanks @user" not "Thanks so much @user!")
+- Add comments when creating new methods or writing complex logic within methods
 
 ## Changelog
 Location: `packages/*/CHANGELOG.md` (each package has its own)
@@ -181,12 +182,8 @@ The script handles: version bump, CHANGELOG finalization, commit, tag, publish, 
 Multiple agents may work on different files in the same worktree simultaneously. You MUST follow these rules:
 
 ### Committing
-- **ONLY commit files YOU changed in THIS session**
-- ALWAYS include `fixes #<number>` or `closes #<number>` in the commit message when there is a related issue or PR
-- NEVER use `git add -A` or `git add .` - these sweep up changes from other agents
-- ALWAYS use `git add <specific-file-paths>` listing only files you modified
-- Before committing, run `git status` and verify you are only staging YOUR files
-- Track which files you created/modified/deleted during the session
+
+Use git commit skill.
 
 ### Forbidden Git Operations
 These commands can destroy other agents' work:

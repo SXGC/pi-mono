@@ -10,6 +10,101 @@ import * as log from "./log.js";
 import type { Attachment, ChannelStore } from "./store.js";
 
 const slackLog = log.createLogger("slack");
+const CHAT_TEXT_CHUNK_CHAR_LIMIT = 4000;
+const CHAT_TEXT_CHUNK_BYTE_LIMIT = 4000;
+
+function getSlackErrorCode(error: unknown): string | undefined {
+	if (!error || typeof error !== "object") return undefined;
+
+	const topLevelError = (error as { error?: unknown }).error;
+	if (typeof topLevelError === "string") {
+		return topLevelError;
+	}
+
+	const data = (error as { data?: { error?: unknown } }).data;
+	if (data && typeof data.error === "string") {
+		return data.error;
+	}
+
+	const code = (error as { code?: unknown }).code;
+	if (typeof code === "string") {
+		return code;
+	}
+
+	return undefined;
+}
+
+function utf8ByteLength(text: string): number {
+	return Buffer.byteLength(text, "utf8");
+}
+
+function takeChunkByBudget(
+	text: string,
+	maxChars: number,
+	maxBytes: number,
+): { chunk: string; consumedCodeUnits: number } {
+	if (!text) return { chunk: "", consumedCodeUnits: 0 };
+
+	let chars = 0;
+	let bytes = 0;
+	let consumedCodeUnits = 0;
+
+	for (const ch of text) {
+		const chBytes = utf8ByteLength(ch);
+		if (chars + 1 > maxChars || bytes + chBytes > maxBytes) {
+			break;
+		}
+		chars += 1;
+		bytes += chBytes;
+		consumedCodeUnits += ch.length;
+	}
+
+	if (consumedCodeUnits === 0) {
+		const first = [...text][0] ?? "";
+		return { chunk: first, consumedCodeUnits: first.length };
+	}
+
+	return {
+		chunk: text.slice(0, consumedCodeUnits),
+		consumedCodeUnits,
+	};
+}
+
+function splitTextForSlack(text: string): string[] {
+	let remaining = text.trim() || "(empty)";
+	const chunks: string[] = [];
+
+	while (remaining.length > 0) {
+		const { chunk, consumedCodeUnits } = takeChunkByBudget(
+			remaining,
+			CHAT_TEXT_CHUNK_CHAR_LIMIT,
+			CHAT_TEXT_CHUNK_BYTE_LIMIT,
+		);
+
+		if (!chunk || consumedCodeUnits <= 0) {
+			break;
+		}
+
+		let finalChunk = chunk;
+		let finalConsumed = consumedCodeUnits;
+
+		if (consumedCodeUnits < remaining.length) {
+			const splitAtNewline = finalChunk.lastIndexOf("\n");
+			if (splitAtNewline > Math.floor(finalChunk.length * 0.5)) {
+				const newlineChunk = finalChunk.slice(0, splitAtNewline).trimEnd();
+				if (newlineChunk.length > 0) {
+					finalChunk = newlineChunk;
+					finalConsumed = newlineChunk.length;
+				}
+			}
+		}
+
+		chunks.push(finalChunk);
+		remaining = remaining.slice(finalConsumed).replace(/^\n+/, "");
+	}
+
+	return chunks.length > 0 ? chunks : ["(empty)"];
+}
 
 // ============================================================================
 // Types
@@ -267,11 +362,14 @@ export class SlackBot {
 		text?: string;
 		blocksCount?: number;
 		blocksJsonSize?: number;
+		blocksJsonUtf8Bytes?: number;
 		messageTs?: string;
 		threadTs?: string;
 		filePath?: string;
 		title?: string;
 	}): void {
+		const messageCharLength = input.text?.length ?? 0;
+		const messageUtf8Bytes = input.text ? utf8ByteLength(input.text) : 0;
 		const normalizedPreview = input.text ? input.text.replace(/\s+/g, " ").trim() : "";
 		const preview =
 			normalizedPreview.length > 0
@@ -284,15 +382,37 @@ export class SlackBot {
 			channelName: this.channels.get(input.channel)?.name,
 			operation: input.operation,
 			target: input.target,
-			messageLength: input.text?.length ?? 0,
+			messageLength: messageCharLength,
+			messageCharLength,
+			messageUtf8Bytes,
 			blocksCount: input.blocksCount,
 			blocksJsonSize: input.blocksJsonSize,
+			blocksJsonUtf8Bytes: input.blocksJsonUtf8Bytes,
 			messageTs: input.messageTs,
 			threadTs: input.threadTs,
 			filePath: input.filePath,
 			title: input.title,
 			preview,
 		});
+	}
+
+	private async postSplitChunksInThread(
+		channel: string,
+		threadTs: string,
+		chunks: string[],
+		operationPrefix: string,
+	): Promise<void> {
+		for (let index = 0; index < chunks.length; index++) {
+			const chunk = chunks[index];
+			this.logSendAttempt({
+				operation: `${operationPrefix}-${index + 1}`,
+				target: "thread",
+				channel,
+				text: chunk,
+				threadTs,
+			});
+			await this.webClient.chat.postMessage({ channel, thread_ts: threadTs, text: chunk });
+		}
 	}
 
 	async postMessage(channel: string, text: string): Promise<string> {
@@ -308,6 +428,7 @@ export class SlackBot {
 
 	async postMessageBlocks(channel: string, text: string, blocks: SlackBlock[]): Promise<string> {
 		const blocksJson = JSON.stringify(blocks);
+		const blocksJsonUtf8Bytes = utf8ByteLength(blocksJson);
 		this.logSendAttempt({
 			operation: "postMessageBlocks",
 			target: "main",
@@ -315,9 +436,48 @@ export class SlackBot {
 			text,
 			blocksCount: blocks.length,
 			blocksJsonSize: blocksJson.length,
+			blocksJsonUtf8Bytes,
 		});
-		const result = await this.webClient.chat.postMessage({ channel, text, blocks });
-		return result.ts as string;
+		try {
+			const result = await this.webClient.chat.postMessage({ channel, text, blocks });
+			return result.ts as string;
+		} catch (error) {
+			const errorCode = getSlackErrorCode(error);
+			if (errorCode === "msg_too_long" || errorCode === "msg_blocks_too_long") {
+				const chunks = splitTextForSlack(text);
+				slackLog.warning(
+					"Slack rejected postMessageBlocks payload, splitting into multiple text messages",
+					undefined,
+					{
+						channelId: channel,
+						errorCode,
+						chunkCount: chunks.length,
+						originalLength: text.length,
+						originalUtf8Bytes: utf8ByteLength(text),
+						blocksCount: blocks.length,
+						blocksJsonSize: blocksJson.length,
+						blocksJsonUtf8Bytes,
+					},
+				);
+
+				this.logSendAttempt({
+					operation: "postMessageBlocksSplitMain",
+					target: "main",
+					channel,
+					text: chunks[0],
+				});
+				const mainResult = await this.webClient.chat.postMessage({ channel, text: chunks[0] });
+				const mainTs = mainResult.ts as string;
+
+				if (chunks.length > 1) {
+					await this.postSplitChunksInThread(channel, mainTs, chunks.slice(1), "postMessageBlocksSplitThread");
+				}
+
+				return mainTs;
+			}
+
+			throw error;
+		}
 	}
 
 	async updateMessage(channel: string, ts: string, text: string): Promise<void> {
@@ -328,21 +488,99 @@ export class SlackBot {
 			text,
 			messageTs: ts,
 		});
-		await this.webClient.chat.update({ channel, ts, text });
+
+		try {
+			await this.webClient.chat.update({ channel, ts, text });
+		} catch (error) {
+			const errorCode = getSlackErrorCode(error);
+			if (errorCode === "msg_too_long") {
+				const chunks = splitTextForSlack(text);
+				slackLog.warning("Slack msg_too_long on updateMessage, splitting into multiple messages", undefined, {
+					channelId: channel,
+					messageTs: ts,
+					errorCode,
+					chunkCount: chunks.length,
+					originalLength: text.length,
+					originalUtf8Bytes: utf8ByteLength(text),
+				});
+				this.logSendAttempt({
+					operation: "updateMessageSplitMain",
+					target: "main-update",
+					channel,
+					text: chunks[0],
+					messageTs: ts,
+				});
+				await this.webClient.chat.update({ channel, ts, text: chunks[0] });
+
+				if (chunks.length > 1) {
+					await this.postSplitChunksInThread(channel, ts, chunks.slice(1), "updateMessageSplitThread");
+				}
+
+				return;
+			}
+
+			throw error;
+		}
 	}
 
-	async updateMessageBlocks(channel: string, ts: string, text: string, blocks: SlackBlock[]): Promise<void> {
+	async updateMessageBlocks(
+		channel: string,
+		ts: string,
+		text: string,
+		blocks: SlackBlock[],
+		target: "main-update" | "thread-update" = "main-update",
+	): Promise<void> {
 		const blocksJson = JSON.stringify(blocks);
+		const blocksJsonUtf8Bytes = utf8ByteLength(blocksJson);
 		this.logSendAttempt({
 			operation: "updateMessageBlocks",
-			target: "main-update",
+			target,
 			channel,
 			text,
 			blocksCount: blocks.length,
 			blocksJsonSize: blocksJson.length,
+			blocksJsonUtf8Bytes,
 			messageTs: ts,
 		});
-		await this.webClient.chat.update({ channel, ts, text, blocks });
+
+		try {
+			await this.webClient.chat.update({ channel, ts, text, blocks });
+		} catch (error) {
+			const errorCode = getSlackErrorCode(error);
+
+			if (errorCode === "msg_blocks_too_long" || errorCode === "msg_too_long") {
+				const chunks = splitTextForSlack(text);
+				slackLog.warning("Slack rejected update payload, splitting into multiple text messages", undefined, {
+					channelId: channel,
+					messageTs: ts,
+					errorCode,
+					chunkCount: chunks.length,
+					originalLength: text.length,
+					originalUtf8Bytes: utf8ByteLength(text),
+					blocksCount: blocks.length,
+					blocksJsonSize: blocksJson.length,
+					blocksJsonUtf8Bytes,
+					splitMainLength: chunks[0].length,
+					splitMainUtf8Bytes: utf8ByteLength(chunks[0]),
+				});
+				this.logSendAttempt({
+					operation: "updateMessageBlocksSplitMain",
+					target,
+					channel,
+					text: chunks[0],
+					messageTs: ts,
+				});
+				await this.webClient.chat.update({ channel, ts, text: chunks[0] });
+
+				if (chunks.length > 1) {
+					await this.postSplitChunksInThread(channel, ts, chunks.slice(1), "updateMessageBlocksSplitThread");
+				}
+
+				return;
+			}
+
+			throw error;
+		}
 	}
 
 	async deleteMessage(channel: string, ts: string): Promise<void> {
@@ -369,6 +607,7 @@ export class SlackBot {
 
 	async postInThreadBlocks(channel: string, threadTs: string, text: string, blocks: SlackBlock[]): Promise<string> {
 		const blocksJson = JSON.stringify(blocks);
+		const blocksJsonUtf8Bytes = utf8ByteLength(blocksJson);
 		this.logSendAttempt({
 			operation: "postInThreadBlocks",
 			target: "thread",
@@ -376,15 +615,59 @@ export class SlackBot {
 			text,
 			blocksCount: blocks.length,
 			blocksJsonSize: blocksJson.length,
+			blocksJsonUtf8Bytes,
 			threadTs,
 		});
-		const result = await this.webClient.chat.postMessage({
-			channel,
-			thread_ts: threadTs,
-			text,
-			blocks,
-		});
-		return result.ts as string;
+		try {
+			const result = await this.webClient.chat.postMessage({
+				channel,
+				thread_ts: threadTs,
+				text,
+				blocks,
+			});
+			return result.ts as string;
+		} catch (error) {
+			const errorCode = getSlackErrorCode(error);
+			if (errorCode === "msg_too_long" || errorCode === "msg_blocks_too_long") {
+				const chunks = splitTextForSlack(text);
+				slackLog.warning(
+					"Slack rejected postInThreadBlocks payload, splitting into multiple text messages",
+					undefined,
+					{
+						channelId: channel,
+						threadTs,
+						errorCode,
+						chunkCount: chunks.length,
+						originalLength: text.length,
+						originalUtf8Bytes: utf8ByteLength(text),
+						blocksCount: blocks.length,
+						blocksJsonSize: blocksJson.length,
+						blocksJsonUtf8Bytes,
+					},
+				);
+
+				this.logSendAttempt({
+					operation: "postInThreadBlocksSplitMain",
+					target: "thread",
+					channel,
+					text: chunks[0],
+					threadTs,
+				});
+				const firstResult = await this.webClient.chat.postMessage({
+					channel,
+					thread_ts: threadTs,
+					text: chunks[0],
+				});
+
+				if (chunks.length > 1) {
+					await this.postSplitChunksInThread(channel, threadTs, chunks.slice(1), "postInThreadBlocksSplitThread");
+				}
+
+				return firstResult.ts as string;
+			}
+
+			throw error;
+		}
 	}
 
 	async uploadFile(channel: string, filePath: string, title?: string): Promise<void> {

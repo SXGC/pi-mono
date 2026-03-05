@@ -21,6 +21,7 @@ import {
 	SlackBot as SlackBotClass,
 	type SlackEvent,
 } from "./slack.js";
+import { buildMarkdownPayload } from "./slack-blocks.js";
 import { ChannelStore } from "./store.js";
 
 const observerLog = log.createLogger("observer");
@@ -176,10 +177,16 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 	let mainFallbackText = "";
 
 	const toMarkdownPayload = (text: string): { blocks: SlackBlock[]; fallbackText: string } => {
-		const fallbackText = text.trim() ? text : "(empty)";
-		const blocks: SlackBlock[] = [{ type: "markdown", text: fallbackText }];
-		return { blocks, fallbackText };
+		return buildMarkdownPayload(text, "text");
 	};
+
+	const getRecoveredUpdatePromise = (): Promise<void> =>
+		updatePromise.catch((error: unknown) => {
+			observerLog.warning(
+				`[${event.channel}] Previous Slack update failed, continuing queued operations`,
+				error instanceof Error ? error.message : String(error),
+			);
+		});
 
 	const getMainMessagePayload = (): { blocks: SlackBlock[]; fallbackText: string } => {
 		const displayText = isWorking ? accumulatedText + workingIndicator : accumulatedText;
@@ -207,7 +214,7 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		users: slack.getAllUsers().map((u) => ({ id: u.id, userName: u.userName, displayName: u.displayName })),
 
 		respond: async (text: string, shouldLog = true) => {
-			updatePromise = updatePromise.then(async () => {
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
 				accumulatedText = accumulatedText ? `${accumulatedText}\n${text}` : text;
 				const payload = getMainMessagePayload();
 				mainMessageMode = "markdown";
@@ -228,7 +235,7 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		},
 
 		replaceMessage: async (text: string) => {
-			updatePromise = updatePromise.then(async () => {
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
 				accumulatedText = text;
 				const payload = getMainMessagePayload();
 				mainMessageMode = "markdown";
@@ -244,7 +251,7 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		},
 
 		replaceMessageBlocks: async (blocks: SlackBlock[], fallbackText: string) => {
-			updatePromise = updatePromise.then(async () => {
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
 				accumulatedText = fallbackText;
 				mainMessageMode = "custom-blocks";
 				mainMessageBlocks = blocks;
@@ -258,7 +265,7 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 			await updatePromise;
 		},
 		respondInThread: async (text: string) => {
-			updatePromise = updatePromise.then(async () => {
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
 				if (messageTs) {
 					const payload = toMarkdownPayload(text);
 					const ts = await slack.postInThreadBlocks(
@@ -275,7 +282,7 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 
 		respondBlocksInThread: async (blocks: SlackBlock[], fallbackText: string) => {
 			let postedTs: string | undefined;
-			updatePromise = updatePromise.then(async () => {
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
 				if (messageTs) {
 					const ts = await slack.postInThreadBlocks(event.channel, messageTs, fallbackText, blocks);
 					threadMessageTs.push(ts);
@@ -287,15 +294,15 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		},
 
 		updateThreadBlocks: async (threadMessageTs: string, blocks: SlackBlock[], fallbackText: string) => {
-			updatePromise = updatePromise.then(async () => {
-				await slack.updateMessageBlocks(event.channel, threadMessageTs, fallbackText, blocks);
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
+				await slack.updateMessageBlocks(event.channel, threadMessageTs, fallbackText, blocks, "thread-update");
 			});
 			await updatePromise;
 		},
 
 		setTyping: async (isTyping: boolean) => {
 			if (isTyping && !messageTs) {
-				updatePromise = updatePromise.then(async () => {
+				updatePromise = getRecoveredUpdatePromise().then(async () => {
 					if (!messageTs) {
 						accumulatedText = eventFilename ? `_Starting event: ${eventFilename}_` : "_Thinking_";
 						const payload = getMainMessagePayload();
@@ -314,7 +321,7 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		},
 
 		setWorking: async (working: boolean) => {
-			updatePromise = updatePromise.then(async () => {
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
 				isWorking = working;
 				if (messageTs) {
 					if (mainMessageMode === "markdown") {
@@ -331,7 +338,7 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 		},
 
 		deleteMessage: async () => {
-			updatePromise = updatePromise.then(async () => {
+			updatePromise = getRecoveredUpdatePromise().then(async () => {
 				// Delete thread messages first (in reverse order)
 				for (let i = threadMessageTs.length - 1; i >= 0; i--) {
 					try {
