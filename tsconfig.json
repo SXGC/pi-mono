@@ -24,7 +24,6 @@
 			"@mariozechner/pi-agent-old": ["./packages/agent-old/src/index.ts"],
 			"@mariozechner/pi-agent-old/*": ["./packages/agent-old/src/*"],
 			"@mariozechner/pi-observer": ["./packages/observer/src/index.ts"],
-			"@mariozechner/pi-observer/tracing": ["./packages/observer/src/tracing/index.ts"],
 			"@mariozechner/pi-observer/logger": ["./packages/observer/src/logger/index.ts"],
 			"@mariozechner/pi-observer/*": ["./packages/observer/src/*"]
 		}

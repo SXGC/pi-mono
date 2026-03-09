@@ -1,5 +1,5 @@
 import type { Transport } from "@mariozechner/pi-ai";
-import type { LangfuseConfig } from "@mariozechner/pi-observer/tracing";
+import type { LangfuseConfig } from "@mariozechner/pi-observer";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";

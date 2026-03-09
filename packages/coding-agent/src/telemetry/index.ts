@@ -41,10 +41,10 @@ import {
 	startToolSpan,
 	startTurnSpan,
 	type TracingConfig,
-} from "@mariozechner/pi-observer/tracing";
+} from "@mariozechner/pi-observer";
 
 // Re-export types for backward compatibility
-export type { LangfuseConfig as TelemetryConfig } from "@mariozechner/pi-observer/tracing";
+export type { LangfuseConfig as TelemetryConfig } from "@mariozechner/pi-observer";
 
 // Re-export tracing functions from observer
 export { getTracer, isTelemetryEnabled, startSessionSpan, startToolSpan, startTurnSpan };

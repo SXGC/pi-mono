@@ -1,5 +1,5 @@
 import "./providers/register-builtins.js";
-import { getTracer, isTelemetryEnabled, logTelemetryDebug, type Span } from "@mariozechner/pi-observer/tracing";
+import { getTracer, isTelemetryEnabled, logTelemetryDebug, type Span } from "@mariozechner/pi-observer";
 
 import { getApiProvider } from "./api-registry.js";
 import type {

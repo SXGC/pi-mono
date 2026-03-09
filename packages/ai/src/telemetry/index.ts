@@ -21,7 +21,7 @@
  */
 
 // Re-export types for backward compatibility
-export type { TelemetryConfig as LangfuseConfig } from "@mariozechner/pi-observer/tracing";
+export type { TelemetryConfig as LangfuseConfig } from "@mariozechner/pi-observer";
 // Re-export tracing functions from observer (backward compatible API)
 // Re-export the langfuseConfigToTracingConfig helper for backward compatibility
 export {
@@ -31,4 +31,4 @@ export {
 	langfuseConfigToTracingConfig as langfuseConfigToTelemetryConfig,
 	safeSpanOperation,
 	shutdownTelemetry,
-} from "@mariozechner/pi-observer/tracing";
+} from "@mariozechner/pi-observer";

@@ -25,7 +25,7 @@ import type {
 } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@mariozechner/pi-ai";
 import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@mariozechner/pi-ai";
-import { type Span, startSessionSpan, startToolSpan, startTurnSpan } from "@mariozechner/pi-observer/tracing";
+import { type Span, startSessionSpan, startToolSpan, startTurnSpan } from "@mariozechner/pi-observer";
 import { getDocsPath } from "../config.js";
 import { theme } from "../modes/interactive/theme/theme.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";
