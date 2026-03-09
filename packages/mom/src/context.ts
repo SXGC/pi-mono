@@ -1,88 +1,134 @@
+import type { UserMessage } from "@mariozechner/pi-ai";
+import { type SessionManager, type SessionMessageEntry, SettingsManager } from "@mariozechner/pi-coding-agent";
 import type { LangfuseConfig } from "@mariozechner/pi-observer/tracing";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
-import { log } from "./log.js";
+import lockfile from "proper-lockfile";
 
-// ============================================================================
-// MomSettingsManager - Simple settings for mom
-// ============================================================================
-
-export interface MomCompactionSettings {
-	enabled: boolean;
-	reserveTokens: number;
-	keepRecentTokens: number;
+interface LogMessage {
+	date?: string;
+	ts?: string;
+	user?: string;
+	userName?: string;
+	text?: string;
+	isBot?: boolean;
 }
 
-export interface MomRetrySettings {
-	enabled: boolean;
-	maxRetries: number;
-	baseDelayMs: number;
+export function syncLogToSessionManager(
+	sessionManager: SessionManager,
+	channelDir: string,
+	excludeSlackTs?: string,
+): number {
+	const logFile = join(channelDir, "log.jsonl");
+
+	if (!existsSync(logFile)) return 0;
+
+	const existingMessages = new Set<string>();
+	for (const entry of sessionManager.getEntries()) {
+		if (entry.type === "message") {
+			const msgEntry = entry as SessionMessageEntry;
+			const msg = msgEntry.message as { role: string; content?: unknown };
+			if (msg.role === "user" && msg.content !== undefined) {
+				const content = msg.content;
+				if (typeof content === "string") {
+					let normalized = content.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\] /, "");
+					const attachmentsIdx = normalized.indexOf("\n\n<slack_attachments>\n");
+					if (attachmentsIdx !== -1) {
+						normalized = normalized.substring(0, attachmentsIdx);
+					}
+					existingMessages.add(normalized);
+				} else if (Array.isArray(content)) {
+					for (const part of content) {
+						if (
+							typeof part === "object" &&
+							part !== null &&
+							"type" in part &&
+							part.type === "text" &&
+							"text" in part
+						) {
+							let normalized = (part as { type: "text"; text: string }).text;
+							normalized = normalized.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\] /, "");
+							const attachmentsIdx = normalized.indexOf("\n\n<slack_attachments>\n");
+							if (attachmentsIdx !== -1) {
+								normalized = normalized.substring(0, attachmentsIdx);
+							}
+							existingMessages.add(normalized);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	const logContent = readFileSync(logFile, "utf-8");
+	const logLines = logContent.trim().split("\n").filter(Boolean);
+
+	const newMessages: Array<{ timestamp: number; message: UserMessage }> = [];
+
+	for (const line of logLines) {
+		try {
+			const logMsg: LogMessage = JSON.parse(line);
+
+			const slackTs = logMsg.ts;
+			const date = logMsg.date;
+			if (!slackTs || !date) continue;
+
+			if (excludeSlackTs && slackTs === excludeSlackTs) continue;
+
+			if (logMsg.isBot) continue;
+
+			const messageText = `[${logMsg.userName || logMsg.user || "unknown"}]: ${logMsg.text || ""}`;
+
+			if (existingMessages.has(messageText)) continue;
+
+			const msgTime = new Date(date).getTime() || Date.now();
+			const userMessage: UserMessage = {
+				role: "user",
+				content: [{ type: "text", text: messageText }],
+				timestamp: msgTime,
+			};
+
+			newMessages.push({ timestamp: msgTime, message: userMessage });
+			existingMessages.add(messageText);
+		} catch {}
+	}
+
+	if (newMessages.length === 0) return 0;
+
+	newMessages.sort((a, b) => a.timestamp - b.timestamp);
+
+	for (const { message } of newMessages) {
+		sessionManager.appendMessage(message);
+	}
+
+	return newMessages.length;
 }
-export interface MomImageSettings {
-	autoResize: boolean;
-}
-export interface MomBranchSummarySettings {
-	reserveTokens: number;
-}
+
+type MomSettingsStorage = Parameters<typeof SettingsManager.fromStorage>[0];
+type WorkspaceSettingsScope = "global" | "project";
+
+export type MomLogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 export type MomLangfuseSettings = LangfuseConfig;
-export interface MomFallbackModel {
-	provider: string;
-	modelId: string;
-}
-export interface MomFallbackSettings {
-	enabled?: boolean;
-	models?: MomFallbackModel[];
-	onFallbackExhausted?: "error" | "ask";
-}
 
 export interface MomResponseSettings {
-	/** Respond to @mentions in channels */
 	mention: boolean;
-	/** Respond to direct messages */
 	dm: boolean;
-	/** Respond to regular channel messages (not @mentions) */
 	channel: boolean;
 }
 
-export interface MomSettings {
-	defaultProvider?: string;
-	defaultModel?: string;
-	defaultThinkingLevel?: "off" | "minimal" | "low" | "medium" | "high";
-	compaction?: Partial<MomCompactionSettings>;
-	retry?: Partial<MomRetrySettings>;
-	images?: Partial<MomImageSettings>;
-	branchSummary?: Partial<MomBranchSummarySettings>;
-	langfuse?: MomLangfuseSettings;
-	fallback?: MomFallbackSettings;
+interface MomWorkspaceSettings {
 	response?: Partial<MomResponseSettings>;
-	shellCommandPrefix?: string;
-	theme?: string;
 	env?: Record<string, string>;
 	obsidianPath?: string;
+	langfuse?: MomLangfuseSettings;
+	[key: string]: unknown;
 }
 
-const MOM_LOG_LEVELS = new Set(["trace", "debug", "info", "warn", "error", "fatal"]);
-
-function isMomLogLevel(value: string | undefined): value is "trace" | "debug" | "info" | "warn" | "error" | "fatal" {
-	if (!value) return false;
-	return MOM_LOG_LEVELS.has(value);
+export interface MomResponseSettingsProvider {
+	getResponseSettings(): MomResponseSettings;
 }
-const DEFAULT_COMPACTION: MomCompactionSettings = {
-	enabled: true,
-	reserveTokens: 16384,
-	keepRecentTokens: 20000,
-};
-const DEFAULT_RETRY: MomRetrySettings = {
-	enabled: true,
-	maxRetries: 3,
-	baseDelayMs: 2000,
-};
-const DEFAULT_IMAGES: MomImageSettings = {
-	autoResize: true,
-};
-const DEFAULT_BRANCH_SUMMARY: MomBranchSummarySettings = {
-	reserveTokens: 16384,
-};
+
+const MOM_LOG_LEVELS = new Set<MomLogLevel>(["trace", "debug", "info", "warn", "error", "fatal"]);
 
 const DEFAULT_RESPONSE: MomResponseSettings = {
 	mention: true,
@@ -90,266 +136,241 @@ const DEFAULT_RESPONSE: MomResponseSettings = {
 	channel: false,
 };
 
-/**
- * Settings manager for mom.
- * Stores settings in the workspace root directory.
- */
-export class MomSettingsManager {
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isMomLogLevel(value: string | undefined): value is MomLogLevel {
+	if (!value) return false;
+	return MOM_LOG_LEVELS.has(value as MomLogLevel);
+}
+
+function parseWorkspaceSettings(current: string | undefined, throwOnInvalid = false): MomWorkspaceSettings {
+	if (!current) {
+		return {};
+	}
+
+	try {
+		const parsed = JSON.parse(current);
+		if (!isRecord(parsed)) {
+			if (throwOnInvalid) {
+				throw new Error("Workspace settings must be a JSON object");
+			}
+			return {};
+		}
+		return parsed;
+	} catch (error) {
+		if (throwOnInvalid) {
+			throw error;
+		}
+		return {};
+	}
+}
+
+function normalizeResponseSettings(value: unknown): Partial<MomResponseSettings> {
+	if (!isRecord(value)) {
+		return {};
+	}
+
+	const response: Partial<MomResponseSettings> = {};
+	if (typeof value.mention === "boolean") {
+		response.mention = value.mention;
+	}
+	if (typeof value.dm === "boolean") {
+		response.dm = value.dm;
+	}
+	if (typeof value.channel === "boolean") {
+		response.channel = value.channel;
+	}
+	return response;
+}
+
+function normalizeStringMap(value: unknown): Record<string, string> {
+	if (!isRecord(value)) {
+		return {};
+	}
+
+	const entries = Object.entries(value).filter(([, entryValue]) => typeof entryValue === "string");
+	return Object.fromEntries(entries) as Record<string, string>;
+}
+
+export class WorkspaceSettingsStorage implements MomSettingsStorage {
 	private settingsPath: string;
-	private settings: MomSettings;
 
 	constructor(workspaceDir: string) {
 		this.settingsPath = join(workspaceDir, "settings.json");
-		this.settings = this.load();
 	}
 
-	private load(): MomSettings {
-		if (!existsSync(this.settingsPath)) {
-			return {};
+	private acquireLockSyncWithRetry(path: string): () => void {
+		const maxAttempts = 10;
+		const delayMs = 20;
+		let lastError: unknown;
+
+		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			try {
+				return lockfile.lockSync(path, { realpath: false });
+			} catch (error) {
+				const code =
+					typeof error === "object" && error !== null && "code" in error
+						? String((error as { code?: unknown }).code)
+						: undefined;
+				if (code !== "ELOCKED" || attempt === maxAttempts) {
+					throw error;
+				}
+				lastError = error;
+				const start = Date.now();
+				while (Date.now() - start < delayMs) {}
+			}
 		}
 
-		try {
-			const content = readFileSync(this.settingsPath, "utf-8");
-			return JSON.parse(content);
-		} catch {
-			return {};
-		}
+		throw (lastError as Error) ?? new Error("Failed to acquire workspace settings lock");
 	}
 
-	private save(): void {
+	private getSettingsPath(_scope: WorkspaceSettingsScope): string {
+		return this.settingsPath;
+	}
+
+	withLock(scope: WorkspaceSettingsScope, fn: (current: string | undefined) => string | undefined): void {
+		const path = this.getSettingsPath(scope);
+		const dir = dirname(path);
+
+		let release: (() => void) | undefined;
 		try {
-			const dir = dirname(this.settingsPath);
+			const fileExists = existsSync(path);
+			if (fileExists) {
+				release = this.acquireLockSyncWithRetry(path);
+			}
+
+			const current = fileExists ? readFileSync(path, "utf-8") : undefined;
+			const next = fn(current);
+			if (next === undefined) {
+				return;
+			}
+
 			if (!existsSync(dir)) {
 				mkdirSync(dir, { recursive: true });
 			}
-			writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2), "utf-8");
-		} catch (error) {
-			log.error({ error: String(error) }, "Could not save settings file");
+			if (!release) {
+				release = this.acquireLockSyncWithRetry(path);
+			}
+
+			writeFileSync(path, next, "utf-8");
+		} finally {
+			if (release) {
+				release();
+			}
 		}
 	}
+}
 
-	getCompactionSettings(): MomCompactionSettings {
-		return {
-			...DEFAULT_COMPACTION,
-			...this.settings.compaction,
-		};
+export class MomRuntimeSettings implements MomResponseSettingsProvider {
+	private storage: MomSettingsStorage;
+
+	constructor(storage: MomSettingsStorage) {
+		this.storage = storage;
 	}
 
-	getCompactionEnabled(): boolean {
-		return this.settings.compaction?.enabled ?? DEFAULT_COMPACTION.enabled;
+	private readSettings(): MomWorkspaceSettings {
+		let settings: MomWorkspaceSettings = {};
+		this.storage.withLock("global", (current) => {
+			settings = parseWorkspaceSettings(current);
+			return undefined;
+		});
+		return settings;
 	}
 
-	setCompactionEnabled(enabled: boolean): void {
-		this.settings.compaction = { ...this.settings.compaction, enabled };
-		this.save();
-	}
-
-	getRetrySettings(): MomRetrySettings {
-		return {
-			...DEFAULT_RETRY,
-			...this.settings.retry,
-		};
-	}
-
-	getRetryEnabled(): boolean {
-		return this.settings.retry?.enabled ?? DEFAULT_RETRY.enabled;
-	}
-
-	setRetryEnabled(enabled: boolean): void {
-		this.settings.retry = { ...this.settings.retry, enabled };
-		this.save();
+	private updateSettings(updater: (settings: MomWorkspaceSettings) => void): void {
+		this.storage.withLock("global", (current) => {
+			const settings = parseWorkspaceSettings(current, true);
+			updater(settings);
+			return JSON.stringify(settings, null, 2);
+		});
 	}
 
 	getResponseSettings(): MomResponseSettings {
+		const settings = this.readSettings();
 		return {
 			...DEFAULT_RESPONSE,
-			...this.settings.response,
-		};
-	}
-	getDefaultModel(): string | undefined {
-		return this.settings.defaultModel;
-	}
-
-	getDefaultProvider(): string | undefined {
-		return this.settings.defaultProvider;
-	}
-
-	setDefaultModelAndProvider(provider: string, modelId: string): void {
-		this.settings.defaultProvider = provider;
-		this.settings.defaultModel = modelId;
-		this.save();
-	}
-
-	getDefaultThinkingLevel(): "off" | "minimal" | "low" | "medium" | "high" {
-		return this.settings.defaultThinkingLevel || "off";
-	}
-
-	setDefaultThinkingLevel(level: "off" | "minimal" | "low" | "medium" | "high"): void {
-		this.settings.defaultThinkingLevel = level;
-		this.save();
-	}
-
-	getImageAutoResize(): boolean {
-		return this.settings.images?.autoResize ?? DEFAULT_IMAGES.autoResize;
-	}
-
-	setImageAutoResize(enabled: boolean): void {
-		this.settings.images = { ...this.settings.images, autoResize: enabled };
-		this.save();
-	}
-
-	getShellCommandPrefix(): string | undefined {
-		return this.settings.shellCommandPrefix;
-	}
-
-	setShellCommandPrefix(prefix: string | undefined): void {
-		this.settings.shellCommandPrefix = prefix;
-		this.save();
-	}
-
-	getBranchSummarySettings(): MomBranchSummarySettings {
-		return {
-			...DEFAULT_BRANCH_SUMMARY,
-			...this.settings.branchSummary,
+			...normalizeResponseSettings(settings.response),
 		};
 	}
 
-	getTheme(): string | undefined {
-		return this.settings.theme;
-	}
-
-	getObsidianPath(): string | undefined {
-		return this.settings.obsidianPath;
-	}
-
-	setObsidianPath(path: string | undefined): void {
-		this.settings.obsidianPath = path;
-		this.save();
-	}
-	getLangfuseSettings(): MomLangfuseSettings {
-		return this.settings.langfuse ?? { enabled: false };
-	}
-
-	getFallbackEnabled(): boolean {
-		return this.settings.fallback?.enabled ?? false;
-	}
-
-	setFallbackEnabled(enabled: boolean): void {
-		if (!this.settings.fallback) {
-			this.settings.fallback = {};
-		}
-		this.settings.fallback.enabled = enabled;
-		this.save();
-	}
-
-	getFallbackModels(): MomFallbackModel[] | undefined {
-		return this.settings.fallback?.models;
-	}
-
-	setFallbackModels(models: MomFallbackModel[] | undefined): void {
-		if (!this.settings.fallback) {
-			this.settings.fallback = {};
-		}
-		this.settings.fallback.models = models;
-		this.save();
-	}
-
-	getFallbackOnExhausted(): "error" | "ask" {
-		return this.settings.fallback?.onFallbackExhausted ?? "error";
-	}
-
-	setFallbackOnExhausted(action: "error" | "ask"): void {
-		if (!this.settings.fallback) {
-			this.settings.fallback = {};
-		}
-		this.settings.fallback.onFallbackExhausted = action;
-		this.save();
-	}
-
-	getFallbackSettings(): {
-		enabled: boolean;
-		models: MomFallbackModel[] | undefined;
-		onFallbackExhausted: "error" | "ask";
-	} {
-		return {
-			enabled: this.getFallbackEnabled(),
-			models: this.getFallbackModels(),
-			onFallbackExhausted: this.getFallbackOnExhausted(),
-		};
-	}
-
-	reload(): void {
-		this.settings = this.load();
+	setResponseSettings(response: Partial<MomResponseSettings>): void {
+		this.updateSettings((settings) => {
+			settings.response = {
+				...normalizeResponseSettings(settings.response),
+				...response,
+			};
+		});
 	}
 
 	getEnv(): Record<string, string> {
-		const env: Record<string, string> = {};
+		return normalizeStringMap(this.readSettings().env);
+	}
 
-		const rawEnv = this.settings.env;
-		if (rawEnv && typeof rawEnv === "object") {
-			for (const [key, value] of Object.entries(rawEnv as Record<string, unknown>)) {
-				if (!key) continue;
-				if (typeof value !== "string") {
-					log.warn({ key, valueType: typeof value }, "Ignoring non-string settings.env value");
-					continue;
-				}
-				env[key] = value;
+	setEnv(env: Record<string, string> | undefined): void {
+		this.updateSettings((settings) => {
+			if (env && Object.keys(env).length > 0) {
+				settings.env = { ...env };
+				return;
 			}
-		}
 
-		return env;
+			delete settings.env;
+		});
 	}
 
 	applyEnvToProcessEnv(): void {
-		const env = this.getEnv();
-		for (const [key, value] of Object.entries(env)) {
-			if (process.env[key] !== undefined) continue;
-			process.env[key] = value;
+		for (const [key, value] of Object.entries(this.getEnv())) {
+			if (process.env[key] === undefined) {
+				process.env[key] = value;
+			}
 		}
 	}
 
-	// Compatibility methods for AgentSession
-	getSteeringMode(): "all" | "one-at-a-time" {
-		return "one-at-a-time"; // Mom processes one message at a time
+	getLogLevel(): MomLogLevel {
+		const configured = process.env.MOM_LOG_LEVEL ?? this.getEnv().MOM_LOG_LEVEL;
+		return isMomLogLevel(configured) ? configured : "info";
 	}
 
-	setSteeringMode(_mode: "all" | "one-at-a-time"): void {
-		// No-op for mom
+	setLogLevel(level: MomLogLevel | undefined): void {
+		this.updateSettings((settings) => {
+			const env = normalizeStringMap(settings.env);
+			if (level) {
+				env.MOM_LOG_LEVEL = level;
+			} else {
+				delete env.MOM_LOG_LEVEL;
+			}
+
+			if (Object.keys(env).length > 0) {
+				settings.env = env;
+				return;
+			}
+
+			delete settings.env;
+		});
 	}
 
-	getFollowUpMode(): "all" | "one-at-a-time" {
-		return "one-at-a-time"; // Mom processes one message at a time
+	getObsidianPath(): string | undefined {
+		const value = this.readSettings().obsidianPath;
+		return typeof value === "string" ? value : undefined;
 	}
 
-	setFollowUpMode(_mode: "all" | "one-at-a-time"): void {
-		// No-op for mom
-	}
+	setObsidianPath(obsidianPath: string | undefined): void {
+		this.updateSettings((settings) => {
+			if (obsidianPath) {
+				settings.obsidianPath = obsidianPath;
+				return;
+			}
 
-	getHookPaths(): string[] {
-		return []; // Mom doesn't use hooks
+			delete settings.obsidianPath;
+		});
 	}
+}
 
-	getHookTimeout(): number {
-		return 30000;
-	}
+export function createMomSettingsManager(workspaceDir: string): SettingsManager {
+	return SettingsManager.fromStorage(new WorkspaceSettingsStorage(workspaceDir));
+}
 
-	getLogLevel(): "trace" | "debug" | "info" | "warn" | "error" | "fatal" {
-		const envLogLevel = process.env.MOM_LOG_LEVEL;
-		if (isMomLogLevel(envLogLevel)) {
-			return envLogLevel;
-		}
-		if (envLogLevel) {
-			log.warn({ MOM_LOG_LEVEL: envLogLevel }, "Invalid MOM_LOG_LEVEL, falling back to default");
-		}
-
-		return "info";
-	}
-
-	setLogLevel(level: "trace" | "debug" | "info" | "warn" | "error" | "fatal"): void {
-		this.settings.env = {
-			...(this.settings.env ?? {}),
-			MOM_LOG_LEVEL: level,
-		};
-		this.save();
-	}
+export function createMomRuntimeSettings(workspaceDir: string): MomRuntimeSettings {
+	return new MomRuntimeSettings(new WorkspaceSettingsStorage(workspaceDir));
 }

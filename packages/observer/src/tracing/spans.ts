@@ -5,7 +5,7 @@
  */
 
 import type { Span } from "@opentelemetry/api";
-import { getTracer } from "./tracer.js";
+import { getTracer } from "./state.js";
 
 /**
  * Start a session span.

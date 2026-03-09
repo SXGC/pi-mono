@@ -36,6 +36,9 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      shx:
+        specifier: ^0.4.0
+        version: 0.4.0
       tsx:
         specifier: ^4.20.3
         version: 4.21.0
@@ -76,21 +79,12 @@ importers:
       '@google/genai':
         specifier: ^1.40.0
         version: 1.42.0
-      '@langfuse/otel':
-        specifier: ^4.6.1
-        version: 4.6.1(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/exporter-trace-otlp-http@0.212.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))
       '@mariozechner/pi-observer':
         specifier: workspace:*
         version: link:../observer
       '@mistralai/mistralai':
         specifier: 1.10.0
         version: 1.10.0
-      '@opentelemetry/api':
-        specifier: ^1.9.0
-        version: 1.9.0
-      '@opentelemetry/sdk-node':
-        specifier: ^0.212.0
-        version: 0.212.0(@opentelemetry/api@1.9.0)
       '@sinclair/typebox':
         specifier: ^0.34.41
         version: 0.34.48
@@ -107,8 +101,8 @@ importers:
         specifier: ^5.6.2
         version: 5.6.2
       openai:
-        specifier: 6.10.0
-        version: 6.10.0(ws@8.19.0)(zod@3.25.76)
+        specifier: 6.26.0
+        version: 6.26.0(ws@8.19.0)(zod@3.25.76)
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
@@ -176,6 +170,9 @@ importers:
       diff:
         specifier: ^8.0.2
         version: 8.0.3
+      extract-zip:
+        specifier: ^2.0.1
+        version: 2.0.1
       file-type:
         specifier: ^21.1.1
         version: 21.3.0
@@ -192,14 +189,17 @@ importers:
         specifier: ^15.0.12
         version: 15.0.12
       minimatch:
-        specifier: ^10.1.1
-        version: 10.2.2
+        specifier: ^10.2.3
+        version: 10.2.4
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2
       strip-ansi:
         specifier: ^7.1.2
         version: 7.1.2
+      undici:
+        specifier: ^7.19.1
+        version: 7.22.0
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -277,6 +277,9 @@ importers:
       diff:
         specifier: ^8.0.2
         version: 8.0.3
+      proper-lockfile:
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@types/diff':
         specifier: ^7.0.2
@@ -284,6 +287,9 @@ importers:
       '@types/node':
         specifier: ^24.3.0
         version: 24.10.13
+      '@types/proper-lockfile':
+        specifier: ^4.1.4
+        version: 4.1.4
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -325,8 +331,8 @@ importers:
   packages/pods:
     dependencies:
       '@mariozechner/pi-agent-core':
-        specifier: ^0.54.2
-        version: 0.54.2(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.56.3
+        version: 0.56.3(ws@8.19.0)(zod@3.25.76)
       chalk:
         specifier: ^5.5.0
         version: 5.6.2
@@ -342,9 +348,6 @@ importers:
       get-east-asian-width:
         specifier: ^1.3.0
         version: 1.5.0
-      koffi:
-        specifier: ^2.9.0
-        version: 2.15.1
       marked:
         specifier: ^15.0.12
         version: 15.0.12
@@ -358,6 +361,10 @@ importers:
       '@xterm/xterm':
         specifier: ^5.5.0
         version: 5.5.0
+    optionalDependencies:
+      koffi:
+        specifier: ^2.9.0
+        version: 2.15.1
 
   packages/web-ui:
     dependencies:
@@ -365,14 +372,14 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0
       '@mariozechner/pi-agent-core':
-        specifier: ^0.54.2
-        version: 0.54.2(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.56.3
+        version: 0.56.3(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-ai':
-        specifier: ^0.54.2
-        version: 0.54.2(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.56.3
+        version: 0.56.3(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-tui':
-        specifier: ^0.54.2
-        version: 0.54.2
+        specifier: ^0.56.3
+        version: 0.56.3
       '@sinclair/typebox':
         specifier: ^0.34.41
         version: 0.34.48
@@ -951,21 +958,24 @@ packages:
     peerDependencies:
       lit: ^3.3.1
 
-  '@mariozechner/pi-agent-core@0.54.2':
-    resolution: {integrity: sha512-dSg5tl3SGdrTFeTxfifvHjZ39M8k4jQ0ogTDtVeP7Pi3A3Whw4W1o6pYzTjX285CLxxqKiJS6MkwoElQHFwH1A==}
+  '@mariozechner/pi-agent-core@0.56.3':
+    resolution: {integrity: sha512-TsI1zENf3wqqKPaERnj486Q4i6Y/y6lAZipLNcfDYUDxDrLwNfQ9EW9xukkbJfTZ8zjG3VZ2pBZe3C7wM51dVQ==}
     engines: {node: '>=20.0.0'}
 
-  '@mariozechner/pi-ai@0.54.2':
-    resolution: {integrity: sha512-QKQV8iT7afwdaOiLDPTPyQcsGw4ulxBjAI0GvgvowAuqy9UbDeKFSdQYLmjVt7CtnJD1Z8zMjQQ4SLigdZ6dRQ==}
+  '@mariozechner/pi-ai@0.56.3':
+    resolution: {integrity: sha512-l4J+cVyVeBLAlGOY/osGDvsbTz0DySCQmR171G6SdbPvIeLGhIi6siZ+zHwq91GJYjv/wtu/08M08ag2mGZKeA==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
-  '@mariozechner/pi-tui@0.54.2':
-    resolution: {integrity: sha512-ekk7x69qvESE7NMRO+VIduVV1T/kH+Ghroh8yqZ1y0IF4U85nzZ4jwV8JECuiGUvtFE0MMwWfJc9KdEur4xF6A==}
+  '@mariozechner/pi-tui@0.56.3':
+    resolution: {integrity: sha512-eZ1P9QRKHp78hwx+lITr/mujZqe+eCwL/bOS9vXXkFP070RW4VYum0j7TJ4BrFEH/nNkXRS1tYCXYU05une1bA==}
     engines: {node: '>=20.0.0'}
 
   '@mistralai/mistralai@1.10.0':
     resolution: {integrity: sha512-tdIgWs4Le8vpvPiUEWne6tK0qbVc+jMenujnvTqOjogrJUsCSQhus0tHTU1avDDh5//Rq2dFgP9mWRAdIEoBqg==}
+
+  '@mistralai/mistralai@1.14.1':
+    resolution: {integrity: sha512-IiLmmZFCCTReQgPAT33r7KQ1nYo5JPdvGkrkZqA8qQ2qB1GHgs5LoP5K2ICyrjnpw2n8oSxMM/VP+liiKcGNlQ==}
 
   '@napi-rs/canvas-android-arm64@0.1.94':
     resolution: {integrity: sha512-YQ6K83RWNMQOtgpk1aIML97QTE3zxPmVCHTi5eA8Nss4+B9JZi5J7LHQr7B5oD7VwSfWd++xsPdUiJ1+frqsMg==}
@@ -1908,6 +1918,9 @@ packages:
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
+  '@types/yauzl@2.10.3':
+    resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
+
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260120.1':
     resolution: {integrity: sha512-r3pWFuR2H7mn6ScwpH5jJljKQqKto0npVuJSk6pRwFwexpTyxOGmJTZJ1V0AWiisaNxU2+CNAqWFJSJYIE/QTg==}
     cpu: [arm64]
@@ -2077,6 +2090,9 @@ packages:
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
+
+  buffer-crc32@0.2.13:
+    resolution: {integrity: sha512-VO9Ht/+p3SN7SKWqcrgEzjGbRSJYTx+Q1pTQC0wrWqHx0vpJraQ6GtHx8tvcg1rlK1byhU5gccxgOgj7B0TDkQ==}
 
   buffer-equal-constant-time@1.0.1:
     resolution: {integrity: sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA==}
@@ -2323,6 +2339,11 @@ packages:
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
 
+  extract-zip@2.0.1:
+    resolution: {integrity: sha512-GDhU9ntwuKyGXdZBUgTIe+vXnWj0fppUEtMDL0+idd5Sta8TGpHssn/eusA9mrPr9qNDym6SxAYZjNvCn/9RBg==}
+    engines: {node: '>= 10.17.0'}
+    hasBin: true
+
   fast-copy@4.0.2:
     resolution: {integrity: sha512-ybA6PDXIXOXivLJK/z9e+Otk7ve13I4ckBvGO5I2RRmBU1gMHLVDJYEuJYhGwez7YNlYji2M2DvVU+a9mSFDlw==}
 
@@ -2345,6 +2366,9 @@ packages:
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
+
+  fd-slicer@1.1.0:
+    resolution: {integrity: sha512-cE1qsB/VwyQozZ+q1dGxR8LBYNZeofhEdUNGSMbQD3Gw2lAzX9Zb3uIU6Ebc/Fmyjo9AWWfnn0AUCHqtevs/8g==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -2426,6 +2450,10 @@ packages:
   get-stream@4.1.0:
     resolution: {integrity: sha512-GMat4EJ5161kIy2HevLlr4luNjBgvmj413KaQA7jt4V8B4RDsfpHk7WQ9GVqfYyyx8OS/L66Kox+rJRNklLK7w==}
     engines: {node: '>=6'}
+
+  get-stream@5.2.0:
+    resolution: {integrity: sha512-nBF+F1rAZVCu/p7rjzgA+Yb4lfYXrpl7a6VmJrU8wF9I1CKvP/QwPNZHnOlwbTkY6dvtFIzFMSyQXbLoTQPRpA==}
+    engines: {node: '>=8'}
 
   get-tsconfig@4.13.6:
     resolution: {integrity: sha512-shZT/QMiSHc/YBLxxOkMtgSid5HFoauqCE3/exfsEcwg1WkeqjG+V40yBbBrsD+jW2HDXcs28xOfcbm2jI8Ddw==}
@@ -2779,8 +2807,8 @@ packages:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
     engines: {node: '>=10'}
 
-  minimatch@10.2.2:
-    resolution: {integrity: sha512-+G4CpNBxa5MprY+04MbgOw1v7So6n5JY166pFi9KfYwT78fxScCeSNQSNzp6dpPSW2rONOps6Ocam1wFhCgoVw==}
+  minimatch@10.2.4:
+    resolution: {integrity: sha512-oRjTw/97aTBN0RHbYCdtF1MQfvusSIBQM0IZEgzl6426+8jSC0nF1a/GmnVLpfB9yyr6g6FTqWqiZVbxrtaCIg==}
     engines: {node: 18 || 20 || >=22}
 
   minimatch@9.0.6:
@@ -2859,8 +2887,8 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openai@6.10.0:
-    resolution: {integrity: sha512-ITxOGo7rO3XRMiKA5l7tQ43iNNu+iXGFAcf2t+aWVzzqRaS0i7m1K2BhxNdaveB+5eENhO0VY1FkiZzhBk4v3A==}
+  openai@6.26.0:
+    resolution: {integrity: sha512-zd23dbWTjiJ6sSAX6s0HrCZi41JwTA1bQVs0wLQPZ2/5o2gxOJA5wh7yOAUgwYybfhDXyhwlpeQf7Mlgx8EOCA==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -2942,6 +2970,9 @@ packages:
   pdfjs-dist@5.4.394:
     resolution: {integrity: sha512-9ariAYGqUJzx+V/1W4jHyiyCep6IZALmDzoaTLZ6VNu8q9LWi1/ukhzHgE2Xsx96AZi0mbZuK4/ttIbqSbLypg==}
     engines: {node: '>=20.16.0 || >=22.3.0'}
+
+  pend@1.2.0:
+    resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -3497,6 +3528,9 @@ packages:
   yargs@17.7.2:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
+
+  yauzl@2.10.0:
+    resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
 
   yoctocolors@2.1.2:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
@@ -4296,9 +4330,9 @@ snapshots:
     transitivePeerDependencies:
       - tailwindcss
 
-  '@mariozechner/pi-agent-core@0.54.2(ws@8.19.0)(zod@3.25.76)':
+  '@mariozechner/pi-agent-core@0.56.3(ws@8.19.0)(zod@3.25.76)':
     dependencies:
-      '@mariozechner/pi-ai': 0.54.2(ws@8.19.0)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.56.3(ws@8.19.0)(zod@3.25.76)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -4308,17 +4342,17 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.54.2(ws@8.19.0)(zod@3.25.76)':
+  '@mariozechner/pi-ai@0.56.3(ws@8.19.0)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@3.25.76)
       '@aws-sdk/client-bedrock-runtime': 3.995.0
       '@google/genai': 1.42.0
-      '@mistralai/mistralai': 1.10.0
+      '@mistralai/mistralai': 1.14.1
       '@sinclair/typebox': 0.34.48
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       chalk: 5.6.2
-      openai: 6.10.0(ws@8.19.0)(zod@3.25.76)
+      openai: 6.26.0(ws@8.19.0)(zod@3.25.76)
       partial-json: 0.1.7
       proxy-agent: 6.5.0
       undici: 7.22.0
@@ -4332,19 +4366,29 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-tui@0.54.2':
+  '@mariozechner/pi-tui@0.56.3':
     dependencies:
       '@types/mime-types': 2.1.4
       chalk: 5.6.2
       get-east-asian-width: 1.5.0
-      koffi: 2.15.1
       marked: 15.0.12
       mime-types: 3.0.2
+    optionalDependencies:
+      koffi: 2.15.1
 
   '@mistralai/mistralai@1.10.0':
     dependencies:
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
+
+  '@mistralai/mistralai@1.14.1':
+    dependencies:
+      ws: 8.19.0
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@napi-rs/canvas-android-arm64@0.1.94':
     optional: true
@@ -5341,6 +5385,11 @@ snapshots:
     dependencies:
       '@types/node': 24.10.13
 
+  '@types/yauzl@2.10.3':
+    dependencies:
+      '@types/node': 24.10.13
+    optional: true
+
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260120.1':
     optional: true
 
@@ -5496,6 +5545,8 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
+
+  buffer-crc32@0.2.13: {}
 
   buffer-equal-constant-time@1.0.1: {}
 
@@ -5752,6 +5803,16 @@ snapshots:
 
   extend@3.0.2: {}
 
+  extract-zip@2.0.1:
+    dependencies:
+      debug: 4.4.3
+      get-stream: 5.2.0
+      yauzl: 2.10.0
+    optionalDependencies:
+      '@types/yauzl': 2.10.3
+    transitivePeerDependencies:
+      - supports-color
+
   fast-copy@4.0.2: {}
 
   fast-deep-equal@3.1.3: {}
@@ -5775,6 +5836,10 @@ snapshots:
   fastq@1.20.1:
     dependencies:
       reusify: 1.1.0
+
+  fd-slicer@1.1.0:
+    dependencies:
+      pend: 1.2.0
 
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
@@ -5867,6 +5932,10 @@ snapshots:
     dependencies:
       pump: 3.0.3
 
+  get-stream@5.2.0:
+    dependencies:
+      pump: 3.0.3
+
   get-tsconfig@4.13.6:
     dependencies:
       resolve-pkg-maps: 1.0.0
@@ -5896,7 +5965,7 @@ snapshots:
 
   glob@13.0.6:
     dependencies:
-      minimatch: 10.2.2
+      minimatch: 10.2.4
       minipass: 7.1.3
       path-scurry: 2.0.2
 
@@ -6175,7 +6244,7 @@ snapshots:
 
   mimic-response@3.1.0: {}
 
-  minimatch@10.2.2:
+  minimatch@10.2.4:
     dependencies:
       brace-expansion: 5.0.2
 
@@ -6239,7 +6308,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@6.10.0(ws@8.19.0)(zod@3.25.76):
+  openai@6.26.0(ws@8.19.0)(zod@3.25.76):
     optionalDependencies:
       ws: 8.19.0
       zod: 3.25.76
@@ -6315,6 +6384,8 @@ snapshots:
   pdfjs-dist@5.4.394:
     optionalDependencies:
       '@napi-rs/canvas': 0.1.94
+
+  pend@1.2.0: {}
 
   picocolors@1.1.1: {}
 
@@ -6919,6 +6990,11 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+
+  yauzl@2.10.0:
+    dependencies:
+      buffer-crc32: 0.2.13
+      fd-slicer: 1.1.0
 
   yoctocolors@2.1.2: {}
 

@@ -9,7 +9,7 @@ import {
 } from "@mariozechner/pi-ai";
 import { join, resolve } from "path";
 import { type AgentRunner, getOrCreateRunner } from "./agent.js";
-import { MomSettingsManager } from "./context.js";
+import { createMomRuntimeSettings, createMomSettingsManager } from "./context.js";
 import { downloadChannel } from "./download.js";
 import { createEventsWatcher } from "./events.js";
 import * as log from "./log.js";
@@ -99,10 +99,11 @@ await validateSandbox(sandbox);
 // Telemetry
 // ============================================================================
 
-const settingsManager = new MomSettingsManager(workingDir);
-settingsManager.applyEnvToProcessEnv();
-log.setLogLevel(settingsManager.getLogLevel());
-const langfuseSettings = settingsManager.getLangfuseSettings();
+const agentSettings = createMomSettingsManager(workingDir);
+const runtimeSettings = createMomRuntimeSettings(workingDir);
+runtimeSettings.applyEnvToProcessEnv();
+log.setLogLevel(runtimeSettings.getLogLevel());
+const langfuseSettings = agentSettings.getLangfuseSettings();
 observerLog.info(
 	`Langfuse telemetry settings: enabled=${langfuseSettings.enabled}, hasSecretKey=${!!langfuseSettings.secretKey}, hasPublicKey=${!!langfuseSettings.publicKey}`,
 );
@@ -226,7 +227,6 @@ function createSlackContext(event: SlackEvent, slack: SlackBot, state: ChannelSt
 				} else {
 					messageTs = await slack.postMessageBlocks(event.channel, payload.fallbackText, payload.blocks);
 				}
-
 				if (shouldLog && messageTs) {
 					slack.logBotResponse(event.channel, text, messageTs);
 				}
@@ -434,7 +434,7 @@ const bot = new SlackBotClass(handler, {
 	botToken: MOM_SLACK_BOT_TOKEN,
 	workingDir,
 	store: sharedStore,
-	settingsManager,
+	settingsManager: runtimeSettings,
 });
 // Start events watcher
 const eventsWatcher = createEventsWatcher(workingDir, bot);

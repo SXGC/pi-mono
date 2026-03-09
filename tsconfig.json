@@ -5,6 +5,7 @@
 		"paths": {
 			"*": ["./*"],
 			"@mariozechner/pi-ai": ["./packages/ai/src/index.ts"],
+			"@mariozechner/pi-ai/oauth": ["./packages/ai/src/oauth.ts"],
 			"@mariozechner/pi-ai/*": ["./packages/ai/src/*"],
 			"@mariozechner/pi-ai/dist/*": ["./packages/ai/src/*"],
 			"@mariozechner/pi-agent-core": ["./packages/agent/src/index.ts"],
@@ -23,6 +24,8 @@
 			"@mariozechner/pi-agent-old": ["./packages/agent-old/src/index.ts"],
 			"@mariozechner/pi-agent-old/*": ["./packages/agent-old/src/*"],
 			"@mariozechner/pi-observer": ["./packages/observer/src/index.ts"],
+			"@mariozechner/pi-observer/tracing": ["./packages/observer/src/tracing/index.ts"],
+			"@mariozechner/pi-observer/logger": ["./packages/observer/src/logger/index.ts"],
 			"@mariozechner/pi-observer/*": ["./packages/observer/src/*"]
 		}
 	},

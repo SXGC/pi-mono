@@ -1,6 +1,11 @@
 import type { Model } from "@mariozechner/pi-ai";
 import { describe, expect, test } from "vitest";
-import { findInitialModel, parseModelPattern, resolveCliModel } from "../src/core/model-resolver.js";
+import {
+	defaultModelPerProvider,
+	findInitialModel,
+	parseModelPattern,
+	resolveCliModel,
+} from "../src/core/model-resolver.js";
 
 // Mock models for testing
 const mockModels: Model<"anthropic-messages">[] = [
@@ -263,7 +268,7 @@ describe("resolveCliModel", () => {
 		expect(result.model?.id).toBe("openai/gpt-4o:extended");
 	});
 
-	test("does not strip invalid :suffix as thinking level in --model (fail fast)", () => {
+	test("does not strip invalid :suffix as thinking level in --model (treat as raw id)", () => {
 		const registry = {
 			getAll: () => allModels,
 		} as unknown as Parameters<typeof resolveCliModel>[0]["modelRegistry"];
@@ -274,8 +279,25 @@ describe("resolveCliModel", () => {
 			modelRegistry: registry,
 		});
 
-		expect(result.model).toBeUndefined();
-		expect(result.error).toContain("not found");
+		expect(result.error).toBeUndefined();
+		expect(result.model?.provider).toBe("openai");
+		expect(result.model?.id).toBe("gpt-4o:extended");
+	});
+
+	test("allows custom model ids for explicit providers without double prefixing", () => {
+		const registry = {
+			getAll: () => allModels,
+		} as unknown as Parameters<typeof resolveCliModel>[0]["modelRegistry"];
+
+		const result = resolveCliModel({
+			cliProvider: "openrouter",
+			cliModel: "openrouter/openai/ghost-model",
+			modelRegistry: registry,
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.model?.provider).toBe("openrouter");
+		expect(result.model?.id).toBe("openai/ghost-model");
 	});
 
 	test("returns a clear error when there are no models", () => {
@@ -351,52 +373,33 @@ describe("resolveCliModel", () => {
 });
 
 describe("default model selection", () => {
-	test("findInitialModel selects configured default model when available", async () => {
-		const openAiModel: Model<"anthropic-messages"> = {
-			id: "gpt-4o",
-			name: "GPT-4o",
-			api: "anthropic-messages",
-			provider: "openai",
-			baseUrl: "https://api.openai.com",
-			reasoning: false,
-			input: ["text", "image"],
-			cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
-			contextWindow: 128000,
-			maxTokens: 4096,
-		};
+	test("openai defaults are gpt-5.4", () => {
+		expect(defaultModelPerProvider.openai).toBe("gpt-5.4");
+		expect(defaultModelPerProvider["openai-codex"]).toBe("gpt-5.4");
+	});
 
-		const aiGatewayModel: Model<"anthropic-messages"> = {
-			id: "anthropic/claude-opus-4-6",
-			name: "Claude Opus 4.6",
-			api: "anthropic-messages",
-			provider: "vercel-ai-gateway",
-			baseUrl: "https://ai-gateway.vercel.sh",
-			reasoning: true,
-			input: ["text", "image"],
-			cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
-			contextWindow: 200000,
-			maxTokens: 8192,
-		};
+	test("ai-gateway default is opus 4.6", () => {
+		expect(defaultModelPerProvider["vercel-ai-gateway"]).toBe("anthropic/claude-opus-4-6");
+	});
 
+	test("findInitialModel accepts explicit provider custom model ids", async () => {
 		const registry = {
-			getAvailable: async () => [aiGatewayModel, openAiModel],
+			getAll: () => allModels,
 		} as unknown as Parameters<typeof findInitialModel>[0]["modelRegistry"];
 
 		const result = await findInitialModel({
+			cliProvider: "openrouter",
+			cliModel: "openrouter/openai/ghost-model",
 			scopedModels: [],
 			isContinuing: false,
-			defaultProvider: "openai",
-			defaultModelId: "gpt-4o",
-			defaultThinkingLevel: "low",
 			modelRegistry: registry,
 		});
 
-		expect(result.model?.provider).toBe("openai");
-		expect(result.model?.id).toBe("gpt-4o");
-		expect(result.thinkingLevel).toBe("low");
+		expect(result.model?.provider).toBe("openrouter");
+		expect(result.model?.id).toBe("openai/ghost-model");
 	});
 
-	test("findInitialModel falls back to first available model when configured default is unavailable", async () => {
+	test("findInitialModel selects ai-gateway default when available", async () => {
 		const aiGatewayModel: Model<"anthropic-messages"> = {
 			id: "anthropic/claude-opus-4-6",
 			name: "Claude Opus 4.6",

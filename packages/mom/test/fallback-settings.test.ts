@@ -1,148 +1,100 @@
-/**
- * Tests for FallbackSettings in MomSettingsManager.
- */
-
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SettingsManager } from "@mariozechner/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MomSettingsManager } from "../src/context.js";
+import { createMomRuntimeSettings, createMomSettingsManager, type MomRuntimeSettings } from "../src/context.js";
 
-describe("MomSettingsManager FallbackSettings", () => {
+describe("mom workspace settings integration", () => {
 	let tempDir: string;
-	let settingsManager: MomSettingsManager;
+	let settingsManager: SettingsManager;
+	let runtimeSettings: MomRuntimeSettings;
+	let originalMomLogLevel: string | undefined;
+	let originalExistingVar: string | undefined;
 
 	beforeEach(() => {
-		tempDir = join(tmpdir(), `pi-mom-fallback-test-${Date.now()}`);
+		tempDir = join(tmpdir(), `pi-mom-settings-test-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
-		settingsManager = new MomSettingsManager(tempDir);
+		settingsManager = createMomSettingsManager(tempDir);
+		runtimeSettings = createMomRuntimeSettings(tempDir);
+		originalMomLogLevel = process.env.MOM_LOG_LEVEL;
+		originalExistingVar = process.env.EXISTING_ENV;
+		delete process.env.MOM_LOG_LEVEL;
+		delete process.env.EXISTING_ENV;
+		delete process.env.FROM_SETTINGS;
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
+		await settingsManager.flush();
+		if (originalMomLogLevel === undefined) {
+			delete process.env.MOM_LOG_LEVEL;
+		} else {
+			process.env.MOM_LOG_LEVEL = originalMomLogLevel;
+		}
+		if (originalExistingVar === undefined) {
+			delete process.env.EXISTING_ENV;
+		} else {
+			process.env.EXISTING_ENV = originalExistingVar;
+		}
+		delete process.env.FROM_SETTINGS;
 		if (tempDir && existsSync(tempDir)) {
 			rmSync(tempDir, { recursive: true });
 		}
 	});
 
-	describe("getFallbackEnabled", () => {
-		it("should return false by default", () => {
-			expect(settingsManager.getFallbackEnabled()).toBe(false);
-		});
+	function readSettingsFile(): Record<string, unknown> {
+		return JSON.parse(readFileSync(join(tempDir, "settings.json"), "utf-8")) as Record<string, unknown>;
+	}
 
-		it("should return true when enabled", () => {
-			settingsManager.setFallbackEnabled(true);
-			expect(settingsManager.getFallbackEnabled()).toBe(true);
-		});
-
-		it("should return false when disabled", () => {
-			settingsManager.setFallbackEnabled(true);
-			settingsManager.setFallbackEnabled(false);
-			expect(settingsManager.getFallbackEnabled()).toBe(false);
-		});
+	it("returns a real SettingsManager for AgentSession", () => {
+		expect(settingsManager).toBeInstanceOf(SettingsManager);
 	});
 
-	describe("setFallbackEnabled", () => {
-		it("should persist enabled state", () => {
-			settingsManager.setFallbackEnabled(true);
+	it("persists shared and mom-only settings into the same workspace file", async () => {
+		settingsManager.setFallbackEnabled(true);
+		settingsManager.setFallbackModels([{ provider: "openai", modelId: "gpt-4o" }]);
+		runtimeSettings.setResponseSettings({ mention: false, channel: true });
+		runtimeSettings.setObsidianPath("/vault/main");
+		runtimeSettings.setLogLevel("debug");
 
-			// Create new instance to test persistence
-			const newManager = new MomSettingsManager(tempDir);
-			expect(newManager.getFallbackEnabled()).toBe(true);
+		await settingsManager.flush();
+
+		const persisted = readSettingsFile();
+		expect(persisted.fallback).toEqual({
+			enabled: true,
+			models: [{ provider: "openai", modelId: "gpt-4o" }],
 		});
+		expect(persisted.response).toEqual({ mention: false, channel: true });
+		expect(persisted.obsidianPath).toBe("/vault/main");
+		expect(persisted.env).toEqual({ MOM_LOG_LEVEL: "debug" });
 
-		it("should persist disabled state", () => {
-			settingsManager.setFallbackEnabled(true);
-			settingsManager.setFallbackEnabled(false);
-
-			const newManager = new MomSettingsManager(tempDir);
-			expect(newManager.getFallbackEnabled()).toBe(false);
+		const reloadedRuntimeSettings = createMomRuntimeSettings(tempDir);
+		expect(reloadedRuntimeSettings.getResponseSettings()).toEqual({
+			mention: false,
+			dm: true,
+			channel: true,
 		});
+		expect(reloadedRuntimeSettings.getObsidianPath()).toBe("/vault/main");
 	});
 
-	describe("getFallbackModels", () => {
-		it("should return undefined by default", () => {
-			expect(settingsManager.getFallbackModels()).toBeUndefined();
-		});
+	it("applies env settings without overriding existing process env", () => {
+		runtimeSettings.setEnv({ FROM_SETTINGS: "from-file", EXISTING_ENV: "from-file", MOM_LOG_LEVEL: "warn" });
+		process.env.EXISTING_ENV = "from-process";
 
-		it("should return configured models", () => {
-			const models = [
-				{ provider: "anthropic", modelId: "claude-sonnet-4-20250514" },
-				{ provider: "openai", modelId: "gpt-4o" },
-			];
-			settingsManager.setFallbackModels(models);
-			expect(settingsManager.getFallbackModels()).toEqual(models);
-		});
+		runtimeSettings.applyEnvToProcessEnv();
+
+		expect(process.env.FROM_SETTINGS).toBe("from-file");
+		expect(process.env.EXISTING_ENV).toBe("from-process");
+		expect(runtimeSettings.getLogLevel()).toBe("warn");
 	});
 
-	describe("setFallbackModels", () => {
-		it("should persist models", () => {
-			const models = [
-				{ provider: "anthropic", modelId: "claude-sonnet-4-20250514" },
-				{ provider: "openai", modelId: "gpt-4o" },
-			];
-			settingsManager.setFallbackModels(models);
+	it("does not silently drop project-scope shared writes", async () => {
+		settingsManager.setProjectPackages([{ source: "npm:test-pkg" }]);
 
-			const newManager = new MomSettingsManager(tempDir);
-			expect(newManager.getFallbackModels()).toEqual(models);
-		});
+		await settingsManager.flush();
 
-		it("should allow clearing models", () => {
-			settingsManager.setFallbackModels([{ provider: "test", modelId: "test" }]);
-			settingsManager.setFallbackModels(undefined);
-
-			expect(settingsManager.getFallbackModels()).toBeUndefined();
-		});
-	});
-
-	describe("getFallbackOnExhausted", () => {
-		it("should return 'error' by default", () => {
-			expect(settingsManager.getFallbackOnExhausted()).toBe("error");
-		});
-
-		it("should return 'ask' when configured", () => {
-			settingsManager.setFallbackOnExhausted("ask");
-			expect(settingsManager.getFallbackOnExhausted()).toBe("ask");
-		});
-	});
-
-	describe("setFallbackOnExhausted", () => {
-		it("should persist 'ask' action", () => {
-			settingsManager.setFallbackOnExhausted("ask");
-
-			const newManager = new MomSettingsManager(tempDir);
-			expect(newManager.getFallbackOnExhausted()).toBe("ask");
-		});
-
-		it("should persist 'error' action", () => {
-			settingsManager.setFallbackOnExhausted("ask");
-			settingsManager.setFallbackOnExhausted("error");
-
-			const newManager = new MomSettingsManager(tempDir);
-			expect(newManager.getFallbackOnExhausted()).toBe("error");
-		});
-	});
-
-	describe("getFallbackSettings", () => {
-		it("should return default settings", () => {
-			const settings = settingsManager.getFallbackSettings();
-			expect(settings).toEqual({
-				enabled: false,
-				models: undefined,
-				onFallbackExhausted: "error",
-			});
-		});
-
-		it("should return configured settings", () => {
-			settingsManager.setFallbackEnabled(true);
-			settingsManager.setFallbackModels([{ provider: "openai", modelId: "gpt-4o" }]);
-			settingsManager.setFallbackOnExhausted("ask");
-
-			const settings = settingsManager.getFallbackSettings();
-			expect(settings).toEqual({
-				enabled: true,
-				models: [{ provider: "openai", modelId: "gpt-4o" }],
-				onFallbackExhausted: "ask",
-			});
-		});
+		const reloadedManager = createMomSettingsManager(tempDir);
+		expect(reloadedManager.getPackages()).toEqual([{ source: "npm:test-pkg" }]);
+		expect(readSettingsFile().packages).toEqual([{ source: "npm:test-pkg" }]);
 	});
 });

@@ -6,8 +6,8 @@
 
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { BatchSpanProcessor, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { logTelemetryDebug } from "../debug.js";
 import type { OTLPExporterConfig } from "../types.js";
-import { logTelemetryDebug } from "./langfuse.js";
 
 /**
  * Default OTLP endpoint.

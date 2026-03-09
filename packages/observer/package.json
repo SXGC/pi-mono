@@ -3,24 +3,30 @@
 	"version": "0.54.2",
 	"description": "Unified structured logging and LLM tracing for pi packages",
 	"type": "module",
-	"main": "./dist/index.js",
-	"types": "./dist/index.d.ts",
+	"main": "./index.js",
+	"types": "./index.d.ts",
 	"files": [
 		"dist",
+		"index.js",
+		"index.d.ts",
+		"tracing.js",
+		"tracing.d.ts",
+		"logger.js",
+		"logger.d.ts",
 		"README.md"
 	],
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
+			"types": "./index.d.ts",
+			"import": "./index.js"
 		},
 		"./tracing": {
-			"types": "./dist/tracing/index.d.ts",
-			"import": "./dist/tracing/index.js"
+			"types": "./tracing.d.ts",
+			"import": "./tracing.js"
 		},
 		"./logger": {
-			"types": "./dist/logger/index.d.ts",
-			"import": "./dist/logger/index.js"
+			"types": "./logger.d.ts",
+			"import": "./logger.js"
 		}
 	},
 	"scripts": {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MomSettingsManager } from "../src/context.js";
+import type { MomResponseSettingsProvider } from "../src/context.js";
 import { type MomHandler, SlackBot, type SlackEvent } from "../src/slack.js";
 import type { ChannelStore } from "../src/store.js";
 
@@ -41,7 +41,7 @@ describe("SlackBot enqueueUserMessage", () => {
 	let slackBot: SlackBot;
 	let mockHandler: MomHandler;
 	let mockWebClient: InstanceType<typeof import("@slack/web-api").WebClient>;
-	let mockSettingsManager: MomSettingsManager;
+	let mockSettingsManager: MomResponseSettingsProvider;
 	let mockStore: ChannelStore;
 
 	const createSlackEvent = (overrides?: Partial<SlackEvent>): SlackEvent => ({
@@ -66,8 +66,8 @@ describe("SlackBot enqueueUserMessage", () => {
 
 		// Create mock settings manager
 		mockSettingsManager = {
-			getResponseSettings: vi.fn().mockReturnValue({ dm: true, channel: true }),
-		} as unknown as MomSettingsManager;
+			getResponseSettings: vi.fn().mockReturnValue({ mention: true, dm: true, channel: true }),
+		};
 
 		// Create mock store
 		mockStore = {

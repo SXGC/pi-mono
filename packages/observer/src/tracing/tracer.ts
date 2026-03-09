@@ -5,10 +5,35 @@
  */
 
 import { type Tracer, trace } from "@opentelemetry/api";
-import { NodeSDK } from "@opentelemetry/sdk-node";
+import type { NodeSDK } from "@opentelemetry/sdk-node";
+import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import type { ExporterConfig, TracingConfig } from "../types.js";
-import { createLangfuseSpanProcessor, logTelemetryDebug } from "./exporters/langfuse.js";
-import { createOTLPSpanProcessor } from "./exporters/otlp.js";
+import { logTelemetryDebug } from "./debug.js";
+import {
+	getTracer as getSharedTracer,
+	isTelemetryEnabled as isSharedTelemetryEnabled,
+	resetTracingState,
+	setTracingState,
+} from "./state.js";
+
+interface LangfuseExporterModule {
+	createLangfuseSpanProcessor: (config: Extract<ExporterConfig, { type: "langfuse" }>) => SpanProcessor;
+}
+
+interface OtlpExporterModule {
+	createOTLPSpanProcessor: (config: Extract<ExporterConfig, { type: "otlp" }>) => SpanProcessor;
+}
+
+interface NodeSdkModule {
+	NodeSDK: new (config: { serviceName: string; spanProcessors: SpanProcessor[] }) => NodeSDK;
+}
+
+type DynamicImport = (specifier: string) => Promise<unknown>;
+
+const dynamicImport: DynamicImport = (specifier) => import(specifier);
+const SDK_NODE_SPECIFIER = "@opentelemetry/" + "sdk-node";
+const LANGFUSE_EXPORTER_SPECIFIER = "./exporters/" + "langfuse.js";
+const OTLP_EXPORTER_SPECIFIER = "./exporters/" + "otlp.js";
 
 /**
  * Default service name.
@@ -19,29 +44,73 @@ const DEFAULT_SERVICE_NAME = "pi";
  * Global SDK instance.
  */
 let sdk: NodeSDK | undefined;
-
-/**
- * Global tracer instance.
- */
-let tracer: Tracer | undefined;
-
-/**
- * Whether telemetry is enabled.
- */
-let telemetryEnabled = false;
+let initializationPromise: Promise<void> | undefined;
 
 /**
  * Create a span processor for an exporter configuration.
  */
-function createSpanProcessor(config: ExporterConfig) {
+async function createSpanProcessor(config: ExporterConfig): Promise<SpanProcessor> {
 	switch (config.type) {
-		case "langfuse":
-			return createLangfuseSpanProcessor(config);
-		case "otlp":
-			return createOTLPSpanProcessor(config);
+		case "langfuse": {
+			const module = (await dynamicImport(LANGFUSE_EXPORTER_SPECIFIER)) as LangfuseExporterModule;
+			return module.createLangfuseSpanProcessor(config);
+		}
+		case "otlp": {
+			const module = (await dynamicImport(OTLP_EXPORTER_SPECIFIER)) as OtlpExporterModule;
+			return module.createOTLPSpanProcessor(config);
+		}
 		default:
 			throw new Error(`Unknown exporter type: ${(config as { type: string }).type}`);
 	}
+}
+
+async function initializeTracing(config: TracingConfig): Promise<void> {
+	// If no exporters specified, default to Langfuse for backward compatibility
+	const exporters = config.exporters ?? [{ type: "langfuse" as const }];
+
+	// Build span processors
+	const spanProcessors: SpanProcessor[] = [];
+	const errors: string[] = [];
+
+	for (const exporterConfig of exporters) {
+		try {
+			const processor = await createSpanProcessor(exporterConfig);
+			spanProcessors.push(processor);
+			logTelemetryDebug(`created span processor for ${exporterConfig.type}`);
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			errors.push(`${exporterConfig.type}: ${errorMessage}`);
+			logTelemetryDebug(`failed to create span processor for ${exporterConfig.type}`, {
+				error: errorMessage,
+			});
+		}
+	}
+
+	// If no processors were created, return no-op
+	if (spanProcessors.length === 0) {
+		logTelemetryDebug("init skipped: no valid exporters", { errors });
+		if (errors.length > 0) {
+			console.error("Failed to initialize any telemetry exporters:", errors.join("; "));
+		}
+		resetTracingState();
+		return;
+	}
+
+	const serviceName = config.serviceName ?? DEFAULT_SERVICE_NAME;
+	const module = (await dynamicImport(SDK_NODE_SPECIFIER)) as NodeSdkModule;
+
+	sdk = new module.NodeSDK({
+		serviceName,
+		spanProcessors,
+	});
+
+	sdk.start();
+	setTracingState(trace.getTracer(serviceName), true);
+
+	logTelemetryDebug("OpenTelemetry SDK started", {
+		serviceName,
+		processorCount: spanProcessors.length,
+	});
 }
 
 /**
@@ -80,74 +149,32 @@ export function initTracing(config: TracingConfig): () => Promise<void> {
 	// Silently return if disabled
 	if (!config.enabled) {
 		logTelemetryDebug("init skipped: telemetry disabled");
+		resetTracingState();
+		initializationPromise = undefined;
 		return async () => {};
 	}
 
-	// If no exporters specified, default to Langfuse for backward compatibility
-	const exporters = config.exporters ?? [{ type: "langfuse" as const }];
-
-	// Build span processors
-	const spanProcessors = [];
-	const errors: string[] = [];
-
-	for (const exporterConfig of exporters) {
-		try {
-			const processor = createSpanProcessor(exporterConfig);
-			spanProcessors.push(processor);
-			logTelemetryDebug(`created span processor for ${exporterConfig.type}`);
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			errors.push(`${exporterConfig.type}: ${errorMessage}`);
-			logTelemetryDebug(`failed to create span processor for ${exporterConfig.type}`, {
-				error: errorMessage,
-			});
-		}
-	}
-
-	// If no processors were created, return no-op
-	if (spanProcessors.length === 0) {
-		logTelemetryDebug("init skipped: no valid exporters", { errors });
-		if (errors.length > 0) {
-			console.error("Failed to initialize any telemetry exporters:", errors.join("; "));
-		}
-		return async () => {};
-	}
-
-	try {
-		const serviceName = config.serviceName ?? DEFAULT_SERVICE_NAME;
-
-		sdk = new NodeSDK({
-			serviceName,
-			spanProcessors,
-		});
-
-		sdk.start();
-		tracer = trace.getTracer(serviceName);
-		telemetryEnabled = true;
-
-		logTelemetryDebug("OpenTelemetry SDK started", {
-			serviceName,
-			processorCount: spanProcessors.length,
-		});
-
-		return async () => {
-			if (sdk) {
-				logTelemetryDebug("shutdown via init return started");
-				await sdk.shutdown();
-				logTelemetryDebug("shutdown via init return completed");
-				sdk = undefined;
-				tracer = undefined;
-				telemetryEnabled = false;
-			}
-		};
-	} catch (error) {
+	initializationPromise = initializeTracing(config).catch((error) => {
 		logTelemetryDebug("init failed", {
 			error: error instanceof Error ? error.message : String(error),
 		});
-		// Silently degrade on initialization failure
+		resetTracingState();
+		sdk = undefined;
 		console.error("Failed to initialize telemetry:", error);
-		return async () => {};
-	}
+	});
+
+	return async () => {
+		if (initializationPromise) {
+			await initializationPromise;
+		}
+		if (sdk) {
+			logTelemetryDebug("shutdown via init return started");
+			await sdk.shutdown();
+			logTelemetryDebug("shutdown via init return completed");
+			sdk = undefined;
+			resetTracingState();
+		}
+	};
 }
 
 /**
@@ -155,6 +182,9 @@ export function initTracing(config: TracingConfig): () => Promise<void> {
  * Errors are caught and logged, never thrown.
  */
 export async function shutdownTracing(): Promise<void> {
+	if (initializationPromise) {
+		await initializationPromise;
+	}
 	if (!sdk) return;
 	logTelemetryDebug("shutdownTracing started");
 	try {
@@ -167,8 +197,8 @@ export async function shutdownTracing(): Promise<void> {
 		console.error("Failed to shutdown telemetry:", error);
 	} finally {
 		sdk = undefined;
-		tracer = undefined;
-		telemetryEnabled = false;
+		initializationPromise = undefined;
+		resetTracingState();
 	}
 }
 
@@ -176,7 +206,7 @@ export async function shutdownTracing(): Promise<void> {
  * Check if telemetry is currently enabled (SDK initialized).
  */
 export function isTelemetryEnabled(): boolean {
-	return telemetryEnabled;
+	return isSharedTelemetryEnabled();
 }
 
 /**
@@ -184,8 +214,7 @@ export function isTelemetryEnabled(): boolean {
  * Returns undefined if telemetry is not initialized.
  */
 export function getTracer(name?: string): Tracer | undefined {
-	if (!telemetryEnabled) return undefined;
-	return name ? trace.getTracer(name) : tracer;
+	return getSharedTracer(name);
 }
 
 /**
@@ -206,4 +235,4 @@ export function safeSpanOperation<T>(operation: () => T, fallback: T): T {
 }
 
 // Re-export debug utilities
-export { logTelemetryDebug } from "./exporters/langfuse.js";
+export { logTelemetryDebug } from "./debug.js";

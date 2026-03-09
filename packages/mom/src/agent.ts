@@ -21,7 +21,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { mkdir, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
-import { MomSettingsManager } from "./context.js";
+import { createMomRuntimeSettings, createMomSettingsManager } from "./context.js";
 import * as log from "./log.js";
 import { createExecutor, type SandboxConfig } from "./sandbox.js";
 import type { ChannelInfo, SlackContext, UserInfo } from "./slack.js";
@@ -437,12 +437,11 @@ export function getOrCreateRunner(sandboxConfig: SandboxConfig, channelId: strin
 function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDir: string): AgentRunner {
 	const executor = createExecutor(sandboxConfig);
 	const workspacePath = executor.getWorkspacePath(channelDir.replace(`/${channelId}`, ""));
+	const agentSettings = createMomSettingsManager(join(channelDir, ".."));
+	const momSettings = createMomRuntimeSettings(join(channelDir, ".."));
 
 	// Create tools
 	const tools = createMomTools(executor);
-
-	// Create settings manager (needed for obsidianPath in system prompt)
-	const settingsManager = new MomSettingsManager(join(channelDir, ".."));
 
 	// Initial system prompt (will be updated each run with fresh memory/channels/users/skills)
 	const memory = getMemory(channelDir);
@@ -457,15 +456,12 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		[],
 		[],
 		currentSkills,
-		settingsManager.getObsidianPath(),
+		momSettings.getObsidianPath(),
 	);
 
-	// Create session manager
 	// Use a fixed context.jsonl file per channel (not timestamped like coding-agent)
 	const contextFile = join(channelDir, "context.jsonl");
 	const sessionManager = SessionManager.open(contextFile, channelDir);
-
-	// Create AuthStorage and ModelRegistry
 
 	// Create AuthStorage and ModelRegistry
 	// Auth stored outside workspace so agent can't access it
@@ -473,8 +469,8 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 	const modelRegistry = new ModelRegistry(authStorage);
 	const loadedSession = sessionManager.buildSessionContext();
 	const availableModels = modelRegistry.getAvailable();
-	const configuredDefaultProvider = settingsManager.getDefaultProvider();
-	const configuredDefaultModel = settingsManager.getDefaultModel();
+	const configuredDefaultProvider = agentSettings.getDefaultProvider();
+	const configuredDefaultModel = agentSettings.getDefaultModel();
 	const restoredModel = loadedSession.model
 		? availableModels.find(
 				(m) => m.provider === loadedSession.model?.provider && m.id === loadedSession.model?.modelId,
@@ -490,7 +486,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		: configuredModel
 			? "workspace-default"
 			: "first-available";
-	const initialThinkingLevel = initialModel?.reasoning ? settingsManager.getDefaultThinkingLevel() : "off";
+	const initialThinkingLevel = initialModel?.reasoning ? agentSettings.getDefaultThinkingLevel() : "off";
 
 	if (configuredDefaultProvider && configuredDefaultModel) {
 		agentLog.info(`[${channelId}] Startup default model: ${configuredDefaultProvider}/${configuredDefaultModel}`);
@@ -567,7 +563,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 	const session = new AgentSession({
 		agent,
 		sessionManager,
-		settingsManager: settingsManager as any,
+		settingsManager: agentSettings,
 		cwd: process.cwd(),
 		modelRegistry,
 		resourceLoader,
@@ -780,7 +776,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			}
 			agent.setModel(model);
 			sessionManager.appendModelChange(model.provider, model.id);
-			settingsManager.setDefaultModelAndProvider(model.provider, model.id);
+			agentSettings.setDefaultModelAndProvider(model.provider, model.id);
 			agentLog.info(`[${channelId}] Model changed to ${model.provider}/${model.id}`);
 		},
 		async newSession() {
@@ -850,7 +846,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			}
 
 			// Update system prompt with fresh memory, channel/user info, and skills
-			settingsManager.reload();
+			agentSettings.reload();
 			const memory = getMemory(channelDir);
 			const skillLoadResult = loadMomSkills(channelDir, workspacePath, sandboxConfig);
 			const skills = skillLoadResult.skills;
@@ -864,7 +860,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				ctx.channels,
 				ctx.users,
 				skills,
-				settingsManager.getObsidianPath(),
+				momSettings.getObsidianPath(),
 			);
 			currentSystemPrompt = systemPrompt;
 			session.agent.setSystemPrompt(systemPrompt);
@@ -978,7 +974,10 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			};
 			await writeFile(join(channelDir, "last_prompt.jsonl"), JSON.stringify(debugContext, null, 2));
 
-			await session.prompt(userMessage, imageAttachments.length > 0 ? { images: imageAttachments } : undefined);
+			await session.prompt(
+				userMessage,
+				imageAttachments.length > 0 ? { images: imageAttachments, streamingBehavior: "followUp" } : undefined,
+			);
 
 			// Wait for queued messages
 			await queueChain;

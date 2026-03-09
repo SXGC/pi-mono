@@ -6,21 +6,9 @@
 
 import { LangfuseSpanProcessor } from "@langfuse/otel";
 import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { getLogger } from "../../logger/index.js";
+import { logTelemetryDebug } from "../debug.js";
 import type { LangfuseExporterConfig } from "../types.js";
 
-const log = getLogger({ name: "pi-observer" });
-
-/**
- * Log telemetry debug message using observer logger.
- */
-export function logTelemetryDebug(message: string, details?: Record<string, unknown>): void {
-	if (details) {
-		log.debug(details, message);
-		return;
-	}
-	log.debug(message);
-}
 /**
  * Attach debug hooks to a span processor.
  */

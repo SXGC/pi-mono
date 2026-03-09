@@ -5,7 +5,7 @@ import { WebClient } from "@slack/web-api";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { basename, join } from "path";
 import type { AgentRunner } from "./agent.js";
-import type { MomSettingsManager } from "./context.js";
+import type { MomResponseSettingsProvider } from "./context.js";
 import * as log from "./log.js";
 import type { Attachment, ChannelStore } from "./store.js";
 
@@ -285,7 +285,7 @@ export class SlackBot {
 	private handler: MomHandler;
 	private workingDir: string;
 	private store: ChannelStore;
-	private settingsManager: MomSettingsManager;
+	private responseSettingsProvider: MomResponseSettingsProvider;
 	private botUserId: string | null = null;
 	private startupTs: string | null = null; // Messages older than this are just logged, not processed
 	private reconnectAttempts = 0;
@@ -301,13 +301,13 @@ export class SlackBot {
 			botToken: string;
 			workingDir: string;
 			store: ChannelStore;
-			settingsManager: MomSettingsManager;
+			settingsManager: MomResponseSettingsProvider;
 		},
 	) {
 		this.handler = handler;
 		this.workingDir = config.workingDir;
 		this.store = config.store;
-		this.settingsManager = config.settingsManager;
+		this.responseSettingsProvider = config.settingsManager;
 		this.socketClient = new SocketModeClient({
 			appToken: config.appToken,
 			clientPingTimeout: 10_000,
@@ -841,7 +841,7 @@ export class SlackBot {
 			}
 
 			// Check if mentions are enabled
-			const responseSettings = this.settingsManager.getResponseSettings();
+			const responseSettings = this.responseSettingsProvider.getResponseSettings();
 			if (!responseSettings.mention) {
 				safeAck(ack, "app_mention", e.channel);
 				return;
@@ -958,7 +958,7 @@ export class SlackBot {
 			}
 
 			// Check response settings based on message type
-			const responseSettings = this.settingsManager.getResponseSettings();
+			const responseSettings = this.responseSettingsProvider.getResponseSettings();
 			if (isDM && !responseSettings.dm) {
 				safeAck(ack, "message", e.channel);
 				return;

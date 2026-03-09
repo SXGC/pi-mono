@@ -1,5 +1,49 @@
 ## [Unreleased]
 
+## [0.56.3] - 2026-03-06
+
+## [0.56.2] - 2026-03-05
+
+## [0.56.1] - 2026-03-05
+
+## [0.56.0] - 2026-03-04
+
+## [0.55.4] - 2026-03-02
+
+### Fixed
+
+- Fixed mom startup crash caused by settings API drift by using `SettingsManager` with workspace-backed storage ([#1444](https://github.com/badlogic/pi-mono/issues/1444))
+
+## [0.55.3] - 2026-02-27
+
+## [0.55.2] - 2026-02-27
+
+## [0.55.1] - 2026-02-26
+
+## [0.55.0] - 2026-02-24
+
+## [0.56.3] - 2026-03-06
+
+## [0.56.2] - 2026-03-05
+
+## [0.56.1] - 2026-03-05
+
+## [0.56.0] - 2026-03-04
+
+## [0.55.4] - 2026-03-02
+
+### Fixed
+
+- Fixed mom startup crash caused by settings API drift by using `SettingsManager` with workspace-backed storage ([#1444](https://github.com/badlogic/pi-mono/issues/1444))
+
+## [0.55.3] - 2026-02-27
+
+## [0.55.2] - 2026-02-27
+
+## [0.55.1] - 2026-02-26
+
+## [0.55.0] - 2026-02-24
+
 ### Added
 - Added model fallback support: automatically switch to alternative models when the current model fails with retryable errors (rate limits, server errors). Configurable via `fallback` settings in `settings.json`.
 - Added `settings.env` startup environment injection and `MOM_LOG_LEVEL` support.

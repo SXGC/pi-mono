@@ -8,6 +8,7 @@
 		"dev": "concurrently --names \"ai,agent,coding-agent,mom,web-ui,tui\" --prefix-colors \"cyan,yellow,red,white,green,magenta\" \"pnpm -C packages/ai run dev\" \"pnpm -C packages/agent run dev\" \"pnpm -C packages/coding-agent run dev\" \"pnpm -C packages/mom run dev\" \"pnpm -C packages/web-ui run dev\" \"pnpm -C packages/tui run dev\"",
 		"dev:tsc": "concurrently --names \"ai,web-ui\" --prefix-colors \"cyan,green\" \"pnpm -C packages/ai run dev:tsc\" \"pnpm -C packages/web-ui run dev:tsc\"",
 		"check": "biome check --write --error-on-warnings . && tsgo --noEmit && pnpm -C packages/web-ui run check",
+		"check:browser-smoke": "sh -c 'esbuild scripts/browser-smoke-entry.ts --bundle --platform=browser --format=esm --log-limit=0 --outfile=/tmp/pi-browser-smoke.js > /tmp/pi-browser-smoke-errors.log 2>&1 || { echo \"Browser smoke check failed. See /tmp/pi-browser-smoke-errors.log\"; exit 1; }'",
 		"test": "pnpm -r run --if-present test",
 		"version:patch": "pnpm version patch --workspaces --no-git-tag-version && node scripts/sync-versions.js && rm -rf node_modules packages/*/node_modules package-lock.json && pnpm install",
 		"version:minor": "pnpm version minor --workspaces --no-git-tag-version && node scripts/sync-versions.js && rm -rf node_modules packages/*/node_modules package-lock.json && pnpm install",
@@ -28,7 +29,8 @@
 		"concurrently": "^9.2.1",
 		"husky": "^9.1.7",
 		"tsx": "^4.20.3",
-		"typescript": "^5.9.2"
+		"typescript": "^5.9.2",
+		"shx": "^0.4.0"
 	},
 	"engines": {
 		"node": ">=20.0.0"
@@ -42,6 +44,7 @@
 	},
 	"overrides": {
 		"rimraf": "6.1.2",
+		"fast-xml-parser": "5.3.8",
 		"gaxios": {
 			"rimraf": "6.1.2"
 		}

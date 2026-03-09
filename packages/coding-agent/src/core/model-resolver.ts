@@ -10,6 +10,35 @@ import { isValidThinkingLevel } from "../cli/args.js";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
 import type { ModelRegistry } from "./model-registry.js";
 
+/** Default model IDs for each known provider */
+export const defaultModelPerProvider = {
+	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
+	anthropic: "claude-opus-4-6",
+	openai: "gpt-5.4",
+	"azure-openai-responses": "gpt-5.2",
+	"openai-codex": "gpt-5.4",
+	google: "gemini-2.5-pro",
+	"google-gemini-cli": "gemini-2.5-pro",
+	"google-antigravity": "gemini-3.1-pro-high",
+	"google-vertex": "gemini-3-pro-preview",
+	"github-copilot": "gpt-4o",
+	openrouter: "openai/gpt-5.1-codex",
+	"vercel-ai-gateway": "anthropic/claude-opus-4-6",
+	xai: "grok-4-fast-non-reasoning",
+	groq: "openai/gpt-oss-120b",
+	cerebras: "zai-glm-4.6",
+	zai: "glm-4.6",
+	mistral: "devstral-medium-latest",
+	minimax: "MiniMax-M2.1",
+	"minimax-cn": "MiniMax-M2.1",
+	huggingface: "moonshotai/Kimi-K2.5",
+	opencode: "claude-opus-4-6",
+	"opencode-go": "kimi-k2.5",
+	"kimi-coding": "kimi-k2-thinking",
+} as const satisfies Record<string, string>;
+
+type DefaultModelProvider = keyof typeof defaultModelPerProvider;
+
 export interface ScopedModel {
 	model: Model<Api>;
 	/** Thinking level if explicitly specified in pattern (e.g., "model:high"), undefined otherwise */
@@ -85,6 +114,22 @@ export interface ParsedModelResult {
 	/** Thinking level if explicitly specified in pattern, undefined otherwise */
 	thinkingLevel?: ThinkingLevel;
 	warning: string | undefined;
+}
+
+function buildFallbackModel(provider: string, modelId: string, availableModels: Model<Api>[]): Model<Api> | undefined {
+	const providerModels = availableModels.filter((m) => m.provider === provider);
+	if (providerModels.length === 0) return undefined;
+
+	const defaultId = defaultModelPerProvider[provider as DefaultModelProvider];
+	const baseModel = defaultId
+		? (providerModels.find((m) => m.id === defaultId) ?? providerModels[0])
+		: providerModels[0];
+
+	return {
+		...baseModel,
+		id: modelId,
+		name: modelId,
+	};
 }
 
 /**
@@ -361,6 +406,16 @@ export function resolveCliModel(options: {
 		}
 	}
 
+	if (provider) {
+		const fallbackModel = buildFallbackModel(provider, pattern, availableModels);
+		if (fallbackModel) {
+			const fallbackWarning = warning
+				? `${warning} Model "${pattern}" not found for provider "${provider}". Using custom model id.`
+				: `Model "${pattern}" not found for provider "${provider}". Using custom model id.`;
+			return { model: fallbackModel, thinkingLevel: undefined, warning: fallbackWarning, error: undefined };
+		}
+	}
+
 	const display = provider ? `${provider}/${pattern}` : cliModel;
 	return {
 		model: undefined,
@@ -410,12 +465,18 @@ export async function findInitialModel(options: {
 
 	// 1. CLI args take priority
 	if (cliProvider && cliModel) {
-		const found = modelRegistry.find(cliProvider, cliModel);
-		if (!found) {
-			console.error(chalk.red(`Model ${cliProvider}/${cliModel} not found`));
+		const resolved = resolveCliModel({
+			cliProvider,
+			cliModel,
+			modelRegistry,
+		});
+		if (resolved.error) {
+			console.error(chalk.red(resolved.error));
 			process.exit(1);
 		}
-		return { model: found, thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
+		if (resolved.model) {
+			return { model: resolved.model, thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
+		}
 	}
 
 	// 2. Use first model from scoped models (skip if continuing/resuming)

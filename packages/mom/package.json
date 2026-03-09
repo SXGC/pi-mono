@@ -1,6 +1,6 @@
 {
 	"name": "@mariozechner/pi-mom",
-	"version": "0.54.2",
+	"version": "0.56.3",
 	"description": "Slack bot that delegates messages to the pi coding agent",
 	"type": "module",
 	"bin": {
@@ -13,8 +13,8 @@
 		"CHANGELOG.md"
 	],
 	"scripts": {
-		"clean": "rm -rf dist",
-		"build": "tsgo -p tsconfig.build.json && chmod +x dist/main.js",
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json && shx chmod +x dist/main.js",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"prepublishOnly": "pnpm run clean && pnpm run build"
 	},
@@ -30,11 +30,13 @@
 		"@slack/web-api": "^7.0.0",
 		"@slack/web-api": "^7.0.0",
 		"croner": "^9.1.0",
-		"diff": "^8.0.2"
+		"diff": "^8.0.2",
+		"proper-lockfile": "^4.1.2"
 	},
 	"devDependencies": {
 		"@types/diff": "^7.0.2",
 		"@types/node": "^24.3.0",
+		"@types/proper-lockfile": "^4.1.4",
 		"typescript": "^5.7.3",
 		"vitest": "^3.2.4"
 	},
